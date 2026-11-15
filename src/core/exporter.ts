@@ -111,8 +111,8 @@ export function tables(data: AppData, weekStartsOn: number = data.settings.weekS
 
   const journal: Table = {
     name: 'journal_entries',
-    header: ['id', 'date', 'mood', 'text', 'habit_ids', 'created_at', 'updated_at'],
-    rows: [...data.journal].sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id)).map((j) => [j.id, j.date, j.mood ?? '', j.text, j.habitIds.join(' '), j.createdAt, j.updatedAt]),
+    header: ['id', 'kind', 'date', 'mood', 'text', 'habit_ids', 'created_at', 'updated_at'],
+    rows: [...data.journal].sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id)).map((j) => [j.id, j.kind, j.date, j.mood ?? '', j.text, j.habitIds.join(' '), j.createdAt, j.updatedAt]),
   };
 
   return [habits, activityTypes, records, completions, journal];

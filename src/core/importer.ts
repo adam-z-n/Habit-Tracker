@@ -10,7 +10,10 @@ import { defaultSettings, SCHEMA_VERSION, type AppData, type Tombstone } from '.
  */
 export function migrate(data: AppData): AppData {
   const out = data;
-  // Version 1 is the first schema; later steps go here: if (out.schemaVersion < 2) { ...; out.schemaVersion = 2; }
+  if (out.schemaVersion < 2) {
+    // Version 2 tells journal entries and habit notes apart; everything written before is a journal entry.
+    for (const entry of out.journal) entry.kind ??= 'journal';
+  }
   out.schemaVersion = SCHEMA_VERSION;
   return out;
 }
@@ -50,6 +53,9 @@ export function checkBackup(text: string): Checked {
   }
   const data = parsed.data;
   if (!isObject(data)) return fail('The backup contains no data.');
+  if (typeof data.schemaVersion === 'number' && data.schemaVersion > SCHEMA_VERSION) {
+    return fail('This backup was made by a newer version of the app. Update the app, then restore it.');
+  }
   const errors: string[] = [];
   const warnings: string[] = [];
   const lists = ['habits', 'activityTypes', 'records', 'journal', 'reminders'] as const;

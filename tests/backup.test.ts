@@ -163,3 +163,29 @@ describe('Google Sheets backup', () => {
     expect((await sheetsRestore({ url, secret: 'open sesame' }, fetcher)).error).toMatch(/no backup yet/);
   });
 });
+
+describe('older data', () => {
+  it('restores a version 1 backup, treating its journal entries as journal entries', () => {
+    const { data } = sample();
+    const old = structuredClone(data) as unknown as { schemaVersion: number; journal: Record<string, unknown>[] };
+    old.schemaVersion = 1;
+    for (const entry of old.journal) delete entry.kind;
+    const checked = checkBackup(JSON.stringify({ ...makeBackup(data, '2026-11-10T00:00:00.000Z', '0.1.0', 'UTC'), data: old }));
+    expect(checked.ok).toBe(true);
+    expect(checked.backup!.data).toEqual(data);
+  });
+
+  it('refuses data from a newer schema', () => {
+    const { data } = sample();
+    const backup = makeBackup({ ...data, schemaVersion: 99 }, 'now', '9.0.0', 'UTC');
+    expect(checkBackup(JSON.stringify(backup)).errors[0]).toMatch(/newer version/);
+  });
+
+  it('keeps a habit note tied to its habit through export', () => {
+    const { data, habit } = sample();
+    saveJournal(data, { kind: 'note', date: '2026-11-03', text: 'New shoes helped', mood: null, habitIds: [habit.id] }, clockAt('2026-11-03'));
+    const journal = tables(data)[4];
+    const row = journal.rows.find((r) => r[journal.header.indexOf('kind')] === 'note')!;
+    expect(row[journal.header.indexOf('habit_ids')]).toBe(habit.id);
+  });
+});

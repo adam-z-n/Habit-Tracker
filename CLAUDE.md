@@ -21,6 +21,10 @@ later. README, `docs/DATA_FORMAT.md`, `docs/GOOGLE_SHEETS.md`, `docs/ROADMAP.md`
 - Changing the stored shape: bump `SCHEMA_VERSION`, add a step to `migrate`, update `docs/DATA_FORMAT.md`,
   add a test. Old backups must stay restorable.
 - Every mutation sets `updatedAt`; deletions add a tombstone (merge depends on both).
+- The Habits screen is the weekly card view (`WeekCard` in `src/ui/today.tsx`, modelled on a screenshot the
+  owner sent); `DayList`/`HabitCard` remain for the calendar's day sheet. Tapping a day mark toggles a plain
+  habit and opens the activity picker for habits with activity types.
+- Journal entries have `kind` `journal` or `note` (a note has exactly one habit in `habitIds`).
 - The seven acceptance scenarios from the PRD are tests in `tests/scenarios.test.ts`.
 
 ## Working here
