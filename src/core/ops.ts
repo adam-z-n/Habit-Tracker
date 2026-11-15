@@ -210,13 +210,14 @@ export function duplicateHabit(data: AppData, id: string, clock: Clock): Habit |
   return copy;
 }
 
-export function saveJournal(data: AppData, input: { id?: string; date: Day; text: string; mood: number | null; habitIds: string[] }, clock: Clock): JournalEntry {
+export function saveJournal(data: AppData, input: { id?: string; kind?: JournalEntry['kind']; date: Day; text: string; mood: number | null; habitIds: string[] }, clock: Clock): JournalEntry {
+  const kind = input.kind ?? 'journal';
   const existing = input.id ? data.journal.find((j) => j.id === input.id) : undefined;
   if (existing) {
-    Object.assign(existing, { date: input.date, text: input.text, mood: input.mood, habitIds: input.habitIds, updatedAt: clock.now });
+    Object.assign(existing, { kind, date: input.date, text: input.text, mood: input.mood, habitIds: input.habitIds, updatedAt: clock.now });
     return existing;
   }
-  const entry: JournalEntry = { id: newId(), date: input.date, text: input.text, mood: input.mood, habitIds: input.habitIds, createdAt: clock.now, updatedAt: clock.now };
+  const entry: JournalEntry = { id: newId(), kind, date: input.date, text: input.text, mood: input.mood, habitIds: input.habitIds, createdAt: clock.now, updatedAt: clock.now };
   data.journal.push(entry);
   return entry;
 }

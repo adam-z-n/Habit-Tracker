@@ -1,13 +1,14 @@
 import { useState } from 'preact/hooks';
 import { breakdown, describeRecord, SESSIONS } from '../core/breakdown';
-import { addDays, formatDay, formatTime, weekStart, WEEKDAY_SHORT } from '../core/dates';
+import { addDays, formatDay, formatTime, MONTH_LONG, weekday, weekStart, WEEKDAY_SHORT } from '../core/dates';
 import { deleteRecord, fieldsFor, logRecord, quickValues } from '../core/ops';
-import { currentGoal, dayInfo, daySummary, describeFrequency, goalOn, habitsShownOn, isDone, isScheduled, periodInfo, recordsBetween, recordsOn, streak, type DayStatus } from '../core/stats';
+import { currentGoal, dayInfo, describeFrequency, goalOn, habitsShownOn, isDone, isScheduled, periodInfo, recordsBetween, recordsOn, streak, unitOf, type DayStatus } from '../core/stats';
 import type { ActivityRecord, ActivityType, Day, Habit, RecordValue } from '../core/types';
 import { formatNumber } from '../core/units';
 import { Field, Segmented } from './common';
 import { Ring } from './charts';
 import { openHabitEditor, openManage } from './habitEditor';
+import { openJournalEditor } from './journal';
 import { openHabitDetail } from './progress';
 import { confirmSheet, openSheet, toast } from './sheet';
 import { clock, mutate, useData } from './store';
@@ -46,28 +47,22 @@ function removeRecord(rec: ActivityRecord): void {
 
 export function TodayScreen(props: { today: Day }) {
   const { data, index } = useData();
-  const [date, setDate] = useState(props.today);
-  const shown = date > props.today ? props.today : date;
-  const summary = daySummary(data, index, shown);
-  const start = weekStart(shown, data.settings.weekStart);
+  const [anchor, setAnchor] = useState(props.today);
+  const [open, setOpen] = useState<string | null>(null);
+  const ws = data.settings.weekStart;
+  const start = weekStart(anchor > props.today ? props.today : anchor, ws);
   const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
-  const title = shown === props.today ? 'Today' : shown === addDays(props.today, -1) ? 'Yesterday' : formatDay(shown, props.today.slice(0, 4));
+  const end = days[6];
+  const thisWeek = props.today >= start && props.today <= end;
+  const habits = data.habits
+    .filter((h) => (h.status === 'active' && h.startDate <= end) || recordsBetween(index, h.id, start, end).length > 0)
+    .sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
+  const [, month] = (thisWeek ? props.today : end).split('-').map(Number);
   return (
     <div class="screen">
       <header class="top">
-        <div>
-          <div class="eyebrow">{shown === props.today ? formatDay(shown, props.today.slice(0, 4)) : 'Looking back'}</div>
-          <h1>{title}</h1>
-        </div>
+        <h1>Habits</h1>
         <div class="top-actions">
-          {summary.due > 0 && (
-            <div class="summary-ring" aria-label={`${summary.done} of ${summary.due} habits done`}>
-              <Ring value={summary.done / summary.due} size={44} stroke={5} />
-              <span>
-                {summary.done}/{summary.due}
-              </span>
-            </div>
-          )}
           <button class="icon-btn" onClick={openManage} aria-label="Manage habits">
             ☰
           </button>
@@ -77,27 +72,138 @@ export function TodayScreen(props: { today: Day }) {
         </div>
       </header>
 
-      <div class="week-strip">
-        <button class="icon-btn small" aria-label="Previous week" onClick={() => setDate(addDays(shown, -7))}>
-          ‹
-        </button>
+      {data.habits.length === 0 ? (
+        <DayList date={props.today} today={props.today} />
+      ) : (
+        <>
+          <div class="week-head">
+            <div class="week-month">{MONTH_LONG[month - 1]}</div>
+            {days.map((day) => (
+              <div key={day} class={`week-col${day === props.today ? ' today' : ''}`} aria-hidden="true">
+                <span>{Number(day.slice(8))}</span>
+                <span>{WEEKDAY_SHORT[weekday(day)].slice(0, 2)}</span>
+              </div>
+            ))}
+          </div>
+          <div class="habit-list">
+            {habits.map((habit) => (
+              <WeekCard key={habit.id} habit={habit} days={days} today={props.today} open={open === habit.id} onToggle={() => setOpen(open === habit.id ? null : habit.id)} />
+            ))}
+            {!habits.length && <p class="muted pad">No habits for this week.</p>}
+          </div>
+          <div class="week-pager">
+            <button class="chip" onClick={() => setAnchor(addDays(start, -7))}>
+              ‹ Earlier week
+            </button>
+            {!thisWeek && (
+              <>
+                <button class="chip" onClick={() => setAnchor(props.today)}>
+                  This week
+                </button>
+                <button class="chip" onClick={() => setAnchor(addDays(start, 7))}>
+                  Later week ›
+                </button>
+              </>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+const BOLT = 'M13.5 2L4.5 13.5h6L9.5 22l9.5-12h-6.2L13.5 2z';
+const BELL = 'M18 16v-5a6 6 0 10-12 0v5l-1.5 2h15L18 16zM10 20a2 2 0 004 0';
+
+function DayMark(props: { status: DayStatus; scheduled: boolean }) {
+  if (isDone(props.status)) {
+    return (
+      <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
+        <path d="M4.5 12.5l5 5L20 7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" />
+      </svg>
+    );
+  }
+  if (!props.scheduled && props.status === 'none') return <span class="mark-off" />;
+  return (
+    <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
+      <circle cx="12" cy="12" r="5.5" fill="none" stroke="currentColor" stroke-width="2.6" />
+      {props.status !== 'none' && <circle cx="12" cy="12" r="2.4" fill="currentColor" />}
+    </svg>
+  );
+}
+
+/** One habit across the week: a mark per day that can be tapped on or off. */
+function WeekCard(props: { habit: Habit; days: Day[]; today: Day; open: boolean; onToggle: () => void }) {
+  const { habit, days, today } = props;
+  const { data, index } = useData();
+  const ws = data.settings.weekStart;
+  const types = activeTypes(data.activityTypes, habit.id);
+  const run = streak(habit, index, today, ws);
+  const focus = today >= days[0] && today <= days[6] ? today : days[6];
+  const goal = goalOn(habit, focus);
+  const period = periodInfo(habit, index, focus, ws);
+  const targetField = goal.target ? habit.fields.find((f) => f.id === goal.target!.fieldId) : undefined;
+  const hasReminder = data.reminders.some((r) => r.habitId === habit.id && r.enabled);
+  const weekRecs = recordsBetween(index, habit.id, days[0], days[6]);
+  const names: Record<DayStatus, string> = { none: 'not done', min: 'smallest unit done', partial: 'partly done', met: 'done', exceeded: 'done, goal exceeded' };
+
+  const toggle = (day: Day) => {
+    const recs = recordsOn(index, habit.id, day);
+    if (types.length) return openLog(habit, day);
+    if (!recs.length) return quickLog(habit, null, day, 'full');
+    if (recs.length === 1 && !recs[0].note) return removeRecord(recs[0]);
+    openLog(habit, day);
+  };
+
+  return (
+    <div class="wcard" style={{ '--c': habit.color }}>
+      <div class="wgrid">
+        <span class="wstreak" aria-label={`Streak: ${run.current} ${run.unit}${run.current === 1 ? '' : 's'}`}>
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+            <path d={BOLT} fill="currentColor" />
+          </svg>
+          {run.current}
+        </span>
         {days.map((day) => {
-          const s = daySummary(data, index, day);
-          const future = day > props.today;
+          const info = dayInfo(habit, recordsOn(index, habit.id, day), goalOn(habit, day));
+          // Weekly and monthly goals can be done on any day, so every day is open for them.
+          const scheduled = isScheduled(habit, day) || (unitOf(goalOn(habit, day).frequency) !== 'day' && day >= habit.startDate);
           return (
-            <button key={day} class={`week-day${day === shown ? ' on' : ''}${day === props.today ? ' today' : ''}`} disabled={future} onClick={() => setDate(day)} aria-label={formatDay(day)} aria-pressed={day === shown}>
-              <span class="wd">{WEEKDAY_SHORT[(data.settings.weekStart + days.indexOf(day)) % 7].slice(0, 2)}</span>
-              <span class="dn">{Number(day.slice(8))}</span>
-              <span class={`dot${!future && s.due > 0 && s.done === s.due ? ' full' : !future && s.done > 0 ? ' some' : ''}`} />
+            <button key={day} class={`mark ${info.status}`} disabled={day > today} aria-pressed={isDone(info.status)} aria-label={`${habit.name}, ${formatDay(day)}: ${names[info.status]}`} onClick={() => toggle(day)}>
+              <DayMark status={info.status} scheduled={scheduled} />
             </button>
           );
         })}
-        <button class="icon-btn small" aria-label="Next week" disabled={addDays(start, 7) > props.today} onClick={() => setDate(addDays(shown, 7) > props.today ? props.today : addDays(shown, 7))}>
-          ›
+      </div>
+      <div class="wfoot">
+        <button class="wname" onClick={props.onToggle} aria-expanded={props.open}>
+          <span class="wtitle">
+            {habit.icon} {habit.name}
+          </span>
+          {data.settings.detail === 'detailed' && (
+            <span class="wsub">
+              {period ? (
+                <>
+                  <b>{period.count}</b> of {period.goal} this {period.unit}
+                </>
+              ) : goal.target && targetField ? (
+                <>
+                  <b>{formatNumber(goal.target.amount)}</b> {targetField.unit ?? targetField.name.toLowerCase()}
+                </>
+              ) : (
+                describeFrequency(goal.frequency)
+              )}
+            </span>
+          )}
+        </button>
+        <button class="wbell" onClick={() => openHabitEditor(habit.id)} aria-label={hasReminder ? `${habit.name}: reminders on. Edit habit` : `${habit.name}: no reminders. Edit habit`}>
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+            <path d={BELL} fill={hasReminder ? 'currentColor' : 'none'} stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" />
+            {!hasReminder && <path d="M4 4l16 16" stroke="currentColor" stroke-width="2" stroke-linecap="round" />}
+          </svg>
         </button>
       </div>
-
-      <DayList date={shown} today={props.today} />
+      {props.open && <HabitExpanded habit={habit} date={focus} recs={[...weekRecs].reverse()} types={types} showDate />}
     </div>
   );
 }
@@ -216,7 +322,7 @@ function HabitCard(props: { habit: Habit; date: Day; today: Day; open: boolean; 
   );
 }
 
-function HabitExpanded(props: { habit: Habit; date: Day; recs: ActivityRecord[]; types: ActivityType[] }) {
+function HabitExpanded(props: { habit: Habit; date: Day; recs: ActivityRecord[]; types: ActivityType[]; showDate?: boolean }) {
   const { habit, date, recs } = props;
   const { data, index } = useData();
   const period = periodInfo(habit, index, date, data.settings.weekStart);
@@ -230,7 +336,7 @@ function HabitExpanded(props: { habit: Habit; date: Day; recs: ActivityRecord[];
       {recs.length > 0 && (
         <ul class="entries">
           {recs.map((rec) => (
-            <RecordRow key={rec.id} habit={habit} rec={rec} />
+            <RecordRow key={rec.id} habit={habit} rec={rec} showDate={props.showDate} />
           ))}
         </ul>
       )}
@@ -258,6 +364,9 @@ function HabitExpanded(props: { habit: Habit; date: Day; recs: ActivityRecord[];
             {habit.minimum.label || 'Smallest unit'}
           </button>
         )}
+        <button class="chip" onClick={() => openJournalEditor(null, clock().today, { kind: 'note', habitId: habit.id })}>
+          Add note
+        </button>
         <button class="chip" onClick={() => openHabitDetail(habit.id)}>
           Stats
         </button>

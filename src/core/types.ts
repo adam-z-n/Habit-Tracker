@@ -3,7 +3,7 @@
 /** A local calendar day, `YYYY-MM-DD`. */
 export type Day = string;
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 export type Frequency =
   | { type: 'daily' }
@@ -109,6 +109,8 @@ export interface ActivityRecord {
 
 export interface JournalEntry {
   id: string;
+  /** A general journal entry, or a note about one habit (then `habitIds` holds that habit). */
+  kind: 'journal' | 'note';
   date: Day;
   text: string;
   /** 1 (rough) to 5 (great). */

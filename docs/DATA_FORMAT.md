@@ -8,15 +8,17 @@ it in an envelope:
   "format": "habit-tracker-backup",
   "formatVersion": 1,
   "exportedAt": "2026-11-15T14:03:22.120Z",
-  "appVersion": "0.1.0",
+  "appVersion": "0.2.0",
   "timeZone": "America/New_York",
-  "data": { "schemaVersion": 1, "habits": [], "activityTypes": [], "records": [], "journal": [], "reminders": [], "settings": {}, "deleted": [] }
+  "data": { "schemaVersion": 2, "habits": [], "activityTypes": [], "records": [], "journal": [], "reminders": [], "settings": {}, "deleted": [] }
 }
 ```
 
 `formatVersion` and `schemaVersion` only go up. The app restores any backup with a version up to its own
 (`migrate` in `src/core/importer.ts` upgrades older data step by step) and refuses a newer one with a message
 to update.
+
+Schema versions: 1 was the first; 2 added `kind` to journal entries (older entries become `journal`).
 
 ## Conventions
 
@@ -38,7 +40,7 @@ to update.
 | `habits[].fields[]` | Measurements: `id`, `name`, `kind` (`number`, `choice`, `text`), `unit`, `precision`, `options[]`, `required`, `archived` |
 | `activityTypes[]` | `id`, `habitId`, `name`, `icon`, `color`, `fieldIds` (which fields it uses; `null` is all), `defaults` (values for one-tap logging), `order`, `archived` |
 | `records[]` | One activity event: `id`, `habitId`, `activityTypeId` (or `null`), `date`, `time`, `tz`, `level` (`full` or `min`), `values[]` (`{fieldId, value, unit}`), `note` |
-| `journal[]` | `id`, `date`, `text`, `mood` (1–5 or `null`), `habitIds[]` |
+| `journal[]` | `id`, `kind` (`journal`, or `note` for a note about one habit, whose id is then the only entry in `habitIds`), `date`, `text`, `mood` (1–5 or `null`), `habitIds[]` |
 | `reminders[]` | `id`, `habitId`, `time`, `days[]`, `text`, `enabled` |
 | `settings` | `theme`, `accent`, `weekStart`, `distanceUnit`, `timeFormat`, `detail` |
 | `deleted[]` | `{id, at}`: remembers deletions so merging an older backup does not bring items back |

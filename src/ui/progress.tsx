@@ -8,6 +8,7 @@ import { formatNumber } from '../core/units';
 import { Donut, RateBars, StackedBars } from './charts';
 import { Segmented } from './common';
 import { openHabitEditor } from './habitEditor';
+import { HabitWriting } from './journal';
 import { openSheet } from './sheet';
 import { useData } from './store';
 import { DayList, RecordRow } from './today';
@@ -466,6 +467,8 @@ function HabitDetail(props: { habitId: string }) {
           <RateBars points={trend} label={`Share of the goal reached by ${by}`} />
         </div>
       )}
+
+      <HabitWriting habitId={habit.id} />
 
       {history.length > 0 && (
         <>
