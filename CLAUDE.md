@@ -1,0 +1,32 @@
+# Notes for Claude
+
+A personal habit tracker (requirements came from the owner as a PRD, "Onrise-inspired"). Web-first in
+TypeScript (Vite + Preact), served from GitHub Pages, installable as a PWA; a native iOS wrapper may come
+later. README, `docs/DATA_FORMAT.md`, `docs/GOOGLE_SHEETS.md`, `docs/ROADMAP.md` hold the details.
+
+## Layout
+
+- `src/core` – rules with no DOM: `types.ts` (data model), `stats.ts` (completion, streaks, rates),
+  `breakdown.ts` (per-activity metrics), `ops.ts` (all mutations), `exporter.ts`, `importer.ts` (validate,
+  migrate, merge), `sheets.ts`, `periods.ts`, `units.ts`, `zip.ts`.
+- `src/ui` – Preact screens; `store.ts` holds the one `AppData` in localStorage (`habits:data`) and
+  `mutate()` saves and redraws. Sheets settings live in `habits:sync` and are never exported.
+- `apps-script/Code.gs` – runs in the user's Google Sheet; tested through a fake in `tests/backup.test.ts`.
+
+## Rules to keep
+
+- Completions are derived from records, never stored (prevents double counting).
+- Activity types and measurement fields are archived, not removed; records keep their own unit.
+- Goal edits append to `habit.goals` so past days keep their goal.
+- Changing the stored shape: bump `SCHEMA_VERSION`, add a step to `migrate`, update `docs/DATA_FORMAT.md`,
+  add a test. Old backups must stay restorable.
+- Every mutation sets `updatedAt`; deletions add a tombstone (merge depends on both).
+- The seven acceptance scenarios from the PRD are tests in `tests/scenarios.test.ts`.
+
+## Working here
+
+- `npm run typecheck`, `npm test`, `npm run build`. Vite 8 (oxc), TypeScript 7, Preact 11, Vitest 5.
+- Screenshots: `npm run build`, `npx vite preview --port 4173` in the background, then a Playwright script
+  (`NODE_PATH=/opt/node-tools/node_modules`, iPhone 13). Seed data by writing `habits:data` to localStorage.
+- Never push to `main`; one PR per round of changes. Keep `CHANGELOG.md` and `docs/ROADMAP.md` current.
+- The Google Sheets backup has only been tested against the fake, not a live deployment (as of 0.1.0).
