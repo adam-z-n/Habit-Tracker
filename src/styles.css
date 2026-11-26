@@ -1264,6 +1264,36 @@ textarea.input {
   color: var(--muted);
   text-decoration: line-through;
 }
+/* A to-do on one line, cut short with an ellipsis... */
+.tview {
+  display: block;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text);
+  line-height: 1.4;
+}
+/* ...and opened to its full length, wrapped, for reading and editing. */
+.twrap {
+  display: block;
+  resize: none;
+  overflow: hidden;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.4;
+  font-family: inherit;
+}
+.trow.open {
+  align-items: flex-start;
+}
+.trow.open .tcheck {
+  margin-top: 14px;
+}
+.trow.open .tdel {
+  display: grid;
+  margin-top: 6px;
+}
 .tdel {
   display: none;
   width: 36px;

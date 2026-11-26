@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.1
+
+- To-do: no + in the corner of an open list; add to-dos with the "Add a to-do" line. The + on the overview
+  still creates a list.
+- A to-do too long for the screen ends in "…". Tap its text to open it wrapped to full length and edit it;
+  Enter or a tap elsewhere closes it again. The ✕ to delete shows while it is open.
+
 ## 0.4.0
 
 - To-do opens on an overview of all your lists, each shown as a card in its color with how many to-dos are

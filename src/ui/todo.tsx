@@ -21,16 +21,64 @@ function removeItem(item: TodoItem): void {
   });
 }
 
+/**
+ * One to-do. It shows on a single line, cut short with "…" when it is too long; tapping the text opens it
+ * wrapped to its full length, ready to edit. It closes again on Enter, or a tap anywhere else.
+ */
 function TodoRow(props: { item: TodoItem }) {
   const { item } = props;
   const [text, setText] = useState(item.text);
-  useEffect(() => setText(item.text), [item.text]);
-  const commit = () => {
-    if (!text.trim()) return removeItem(item);
-    if (text.trim() !== item.text) mutate((d, c) => updateTodo(d, item.id, { text }, c));
+  const [open, setOpen] = useState(false);
+  const row = useRef<HTMLLIElement>(null);
+  const area = useRef<HTMLTextAreaElement>(null);
+  // Guards against closing twice (a blur and an outside tap can both fire).
+  const isOpen = useRef(false);
+  // The latest text, for an outside tap that lands before the screen has redrawn after a keystroke.
+  const latest = useRef(item.text);
+  const edit = (next: string) => {
+    latest.current = next;
+    setText(next);
   };
+  useEffect(() => edit(item.text), [item.text]);
+
+  const fit = () => {
+    const el = area.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  };
+  const expand = () => {
+    isOpen.current = true;
+    setOpen(true);
+  };
+  const close = (keep = true) => {
+    if (!isOpen.current) return;
+    isOpen.current = false;
+    setOpen(false);
+    if (!keep) return edit(item.text);
+    const next = latest.current;
+    if (!next.trim()) return removeItem(item);
+    if (next.trim() !== item.text) mutate((d, c) => updateTodo(d, item.id, { text: next }, c));
+  };
+
+  useLayoutEffect(() => {
+    if (!open || !area.current) return;
+    fit();
+    area.current.focus();
+    const end = area.current.value.length;
+    area.current.setSelectionRange(end, end);
+  }, [open]);
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: Event) => {
+      if (!row.current?.contains(e.target as Node)) close();
+    };
+    document.addEventListener('pointerdown', away);
+    return () => document.removeEventListener('pointerdown', away);
+  }, [open]);
+
   return (
-    <li class={`trow${item.done ? ' done' : ''}`}>
+    <li ref={row} class={`trow${item.done ? ' done' : ''}${open ? ' open' : ''}`}>
       <button
         class="tcheck"
         role="checkbox"
@@ -43,21 +91,34 @@ function TodoRow(props: { item: TodoItem }) {
       >
         {item.done && <Icon d={CHECK} size={16} width={2} />}
       </button>
-      <input
-        class="ttext"
-        value={text}
-        aria-label="To-do"
-        onInput={(e) => setText((e.target as HTMLInputElement).value)}
-        onBlur={commit}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-          if (e.key === 'Escape') {
-            setText(item.text);
-            (e.target as HTMLInputElement).blur();
-          }
-        }}
-      />
-      <button class="tdel" aria-label={`Delete: ${item.text}`} onClick={() => removeItem(item)}>
+      {open ? (
+        <textarea
+          ref={area}
+          class="ttext twrap"
+          rows={1}
+          value={text}
+          aria-label="To-do"
+          enterkeyhint="done"
+          onInput={(e) => {
+            edit((e.target as HTMLTextAreaElement).value);
+            fit();
+          }}
+          onBlur={() => close()}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              (e.target as HTMLTextAreaElement).blur();
+              close();
+            }
+            if (e.key === 'Escape') close(false);
+          }}
+        />
+      ) : (
+        <button class="ttext tview" aria-label={`${item.text}. Tap to show all and edit`} onClick={expand}>
+          {item.text}
+        </button>
+      )}
+      <button class="tdel" aria-label={`Delete: ${item.text}`} onPointerDown={(e) => e.preventDefault()} onClick={() => removeItem(item)}>
         <Icon d="M7 7l10 10M17 7L7 17" size={18} />
       </button>
     </li>
@@ -180,7 +241,6 @@ function ListView(props: { list: TodoList; lists: TodoList[]; show: (id: string 
   const { list } = props;
   const [draft, setDraft] = useState('');
   const [showDone, setShowDone] = useState(false);
-  const addInput = useRef<HTMLInputElement>(null);
   const items = data.todos.filter((t) => t.listId === list.id);
   const open = items.filter((t) => !t.done).sort((a, b) => a.order - b.order || a.createdAt.localeCompare(b.createdAt));
   const done = items.filter((t) => t.done).sort((a, b) => (b.doneAt ?? '').localeCompare(a.doneAt ?? ''));
@@ -213,9 +273,6 @@ function ListView(props: { list: TodoList; lists: TodoList[]; show: (id: string 
     <div class="screen calm">
       <header class="calm-top">
         <TitleMenu title={list.name} tint={list.color} items={menu} label="Choose or manage lists" />
-        <button class="plain-btn" aria-label="Add a to-do" onClick={() => addInput.current?.focus()}>
-          <Icon d={PLUS} size={26} />
-        </button>
       </header>
       <ul class="tlist">
         {open.map((item) => (
@@ -224,7 +281,6 @@ function ListView(props: { list: TodoList; lists: TodoList[]; show: (id: string 
         <li class="trow tadd">
           <span class="tcheck ghost" aria-hidden="true" />
           <input
-            ref={addInput}
             class="ttext"
             placeholder="Add a to-do"
             aria-label="New to-do"
