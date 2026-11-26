@@ -147,6 +147,21 @@ function DayMark(props: { status: DayStatus; scheduled: boolean }) {
   );
 }
 
+/** The smallest unit as "<b>1</b> page", or its label when it has no number; null when there is none. */
+function minimumText(habit: Habit) {
+  const m = habit.minimum;
+  if (!m) return null;
+  if (m.amount !== undefined) {
+    return (
+      <>
+        <b>{formatNumber(m.amount)}</b>
+        {m.unit ? ` ${m.unit}` : ''}
+      </>
+    );
+  }
+  return m.label || null;
+}
+
 /** One habit across the week: a mark per day that can be tapped on or off. */
 function WeekCard(props: { habit: Habit; days: Day[]; today: Day; open: boolean; onToggle: () => void }) {
   const { habit, days, today } = props;
@@ -157,7 +172,14 @@ function WeekCard(props: { habit: Habit; days: Day[]; today: Day; open: boolean;
   const focus = today >= days[0] && today <= days[6] ? today : days[6];
   const goal = goalOn(habit, focus);
   const period = periodInfo(habit, index, focus, ws);
-  const targetField = goal.target ? habit.fields.find((f) => f.id === goal.target!.fieldId) : undefined;
+  // Progress for the week shown: sessions toward a weekly (or monthly) goal, or done days out of due days.
+  let progress = '';
+  if (period) progress = `${period.count} of ${period.goal} this ${period.unit}`;
+  else {
+    const due = days.filter((d) => isScheduled(habit, d));
+    const done = due.filter((d) => isDone(dayInfo(habit, recordsOn(index, habit.id, d), goalOn(habit, d)).status));
+    if (due.length) progress = `${done.length} of ${due.length} this week`;
+  }
   const names: Record<DayStatus, string> = { none: 'not done', met: 'done', exceeded: 'done, goal exceeded' };
 
   const toggle = (day: Day) => {
@@ -192,17 +214,8 @@ function WeekCard(props: { habit: Habit; days: Day[]; today: Day; open: boolean;
         <span class="wtitle">{habit.name}</span>
         {data.settings.detail === 'detailed' && (
           <span class="wsub">
-            {period ? (
-              <>
-                <b>{period.count}</b> of {period.goal} this {period.unit}
-              </>
-            ) : goal.target && targetField ? (
-              <>
-                <b>{formatNumber(goal.target.amount)}</b> {targetField.unit ?? targetField.name.toLowerCase()}
-              </>
-            ) : (
-              describeFrequency(goal.frequency)
-            )}
+            <span class="wmin">{minimumText(habit) ?? describeFrequency(goal.frequency)}</span>
+            {progress && <span class="wprogress">{progress}</span>}
           </span>
         )}
       </button>
