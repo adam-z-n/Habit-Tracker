@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.2
+
+- Habits: under each habit's name, the smallest unit shows with its number in bold (or the schedule when
+  there is no smallest unit), and the progress for the week sits on the right of the same line: sessions
+  toward a weekly goal ("2 of 3 this week"), or done days out of due days ("4 of 7 this week").
+
 ## 0.4.1
 
 - To-do: no + in the corner of an open list; add to-dos with the "Add a to-do" line. The + on the overview
