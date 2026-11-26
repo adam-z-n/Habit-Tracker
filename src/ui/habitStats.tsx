@@ -1,6 +1,6 @@
 import { useState } from 'preact/hooks';
 import { addDays, addMonths, formatDay, localDay, MONTH_LONG, monthEnd, monthStart, weekday, WEEKDAY_SHORT } from '../core/dates';
-import { currentGoal, dayInfo, describeFrequency, goalOn, isScheduled, recordsOn, streak, type Index } from '../core/stats';
+import { currentGoal, dayInfo, describeFrequency, goalOn, habitStart, isScheduled, recordsOn, streak, type Index } from '../core/stats';
 import type { Day, Habit } from '../core/types';
 import { formatNumber } from '../core/units';
 import { openHabitEditor } from './habitEditor';
@@ -15,7 +15,7 @@ type CellKind = 'future' | 'off' | 'none' | 'met' | 'exceeded';
 function habitCell(habit: Habit, index: Index, day: Day, today: Day): CellKind {
   if (day > today) return 'future';
   const recs = recordsOn(index, habit.id, day);
-  if (!recs.length) return isScheduled(habit, day) && habit.status === 'active' ? 'none' : 'off';
+  if (!recs.length) return isScheduled(habit, day, habitStart(habit, index)) && habit.status === 'active' ? 'none' : 'off';
   return dayInfo(habit, recs, goalOn(habit, day)).status as CellKind;
 }
 

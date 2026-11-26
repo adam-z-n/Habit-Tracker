@@ -18,6 +18,8 @@ later. README, `docs/DATA_FORMAT.md`, `docs/GOOGLE_SHEETS.md`, `docs/ROADMAP.md`
 ## Rules to keep
 
 - Completions are derived from records, never stored (prevents double counting).
+- A habit's effective start is `habitStart(habit, index)`: its start date, or an earlier back-filled record.
+  Pass it as `isScheduled`'s `start` wherever records are at hand, or back-filled days go uncounted (0.4.3 fix).
 - There is no "partly done" (owner's request, 0.3): a day with any record is done; `DayStatus` is only
   `none`, `met` or `exceeded`. Older `min` records and days short of an old daily amount count as done.
 - Activity types and measurement fields are archived, not removed; records keep their own unit.

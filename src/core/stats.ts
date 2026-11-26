@@ -76,9 +76,13 @@ export function habitStart(habit: Habit, index: Index): Day {
 /**
  * Whether the habit was due on a day. Weekly and monthly goals are never due on a particular day,
  * so a day without activity is not a miss for them.
+ *
+ * Pass `start` as `habitStart(habit, index)` wherever records are at hand: a check mark back-filled
+ * before the start date means the habit had begun by then, so those days count too. (The editor no
+ * longer sets a start date, so a new habit starts on the day it is made.)
  */
-export function isScheduled(habit: Habit, day: Day): boolean {
-  if (day < habit.startDate) return false;
+export function isScheduled(habit: Habit, day: Day, start: Day = habit.startDate): boolean {
+  if (day < start) return false;
   const { frequency } = goalOn(habit, day);
   switch (frequency.type) {
     case 'daily':
@@ -86,7 +90,11 @@ export function isScheduled(habit: Habit, day: Day): boolean {
     case 'weekdays':
       return frequency.days.includes(weekday(day));
     case 'interval':
-      return diffDays(habit.startDate, day) % Math.max(1, frequency.every) === 0;
+    {
+      // Counted from the start date in both directions, so back-filled days keep the same rhythm.
+      const every = Math.max(1, frequency.every);
+      return ((diffDays(habit.startDate, day) % every) + every) % every === 0;
+    }
     default:
       return false;
   }
@@ -167,6 +175,20 @@ export function periodInfo(habit: Habit, index: Index, day: Day, weekStartsOn: n
   return { unit, from, to, count, goal: times, status };
 }
 
+/**
+ * "X of Y this week" for the Habits screen: for weekly or monthly goals, sessions toward the goal in the
+ * period containing `focus`; for daily goals, the done days out of the due days among `days`.
+ */
+export function weekProgress(habit: Habit, index: Index, days: Day[], focus: Day, weekStartsOn: number): { done: number; due: number; unit: PeriodUnit } | null {
+  const period = periodInfo(habit, index, focus, weekStartsOn);
+  if (period) return { done: period.count, due: period.goal, unit: period.unit };
+  const first = habitStart(habit, index);
+  const due = days.filter((d) => isScheduled(habit, d, first));
+  if (!due.length) return null;
+  const done = due.filter((d) => isDone(dayStatus(habit, index, d))).length;
+  return { done, due: due.length, unit: 'week' };
+}
+
 export interface Streak {
   current: number;
   longest: number;
@@ -187,11 +209,12 @@ export function streak(habit: Habit, index: Index, today: Day, weekStartsOn: num
       break;
     }
   }
+  const first = habitStart(habit, index);
   let run = 0;
   let longest = 0;
   if (unit === 'day') {
     for (let day = since; day <= today; day = addDays(day, 1)) {
-      if (!isScheduled(habit, day)) continue;
+      if (!isScheduled(habit, day, first)) continue;
       if (isDone(dayStatus(habit, index, day))) {
         run++;
         if (run > longest) longest = run;
@@ -221,14 +244,15 @@ export interface Rate {
  * monthly goals count sessions up to the goal, and the period still running only counts once it is met.
  */
 export function rate(habit: Habit, index: Index, from: Day, to: Day, today: Day, weekStartsOn: number): Rate {
-  const start = maxDay(from, habitStart(habit, index));
+  const first = habitStart(habit, index);
+  const start = maxDay(from, first);
   const end = minDay(to, today);
   const out: Rate = { done: 0, due: 0 };
   const seen = new Set<string>();
   for (let day = start; day <= end; day = addDays(day, 1)) {
     const unit = unitOf(goalOn(habit, day).frequency);
     if (unit === 'day') {
-      if (!isScheduled(habit, day)) continue;
+      if (!isScheduled(habit, day, first)) continue;
       const done = isDone(dayStatus(habit, index, day));
       if (day === today && !done) continue;
       out.due++;
@@ -290,7 +314,7 @@ export function daySummary(data: AppData, index: Index, day: Day): DaySummary {
   const out: DaySummary = { due: 0, done: 0 };
   for (const habit of data.habits) {
     const recs = recordsOn(index, habit.id, day);
-    const scheduled = habit.status === 'active' && isScheduled(habit, day);
+    const scheduled = habit.status === 'active' && isScheduled(habit, day, habitStart(habit, index));
     if (!scheduled && !recs.length) continue;
     out.due++;
     if (isDone(dayInfo(habit, recs, goalOn(habit, day)).status)) out.done++;
