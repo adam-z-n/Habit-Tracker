@@ -1,14 +1,12 @@
-import { useEffect, useRef, useState } from 'preact/hooks';
-import { addTodo, createTodoList, deleteTodo, deleteTodoList, renameTodoList, updateTodo } from '../core/ops';
-import type { TodoItem } from '../core/types';
-import { CHECK, Icon, PLUS, TitleMenu, type MenuItem } from './common';
+import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
+import { addTodo, createTodoList, deleteTodo, deleteTodoList, nextListColor, updateTodo, updateTodoList } from '../core/ops';
+import type { TodoItem, TodoList } from '../core/types';
+import { CHECK, ColorPicker, Icon, PLUS, TitleMenu, type MenuItem } from './common';
 import { confirmSheet, openSheet, toast } from './sheet';
-import { mutate, useData } from './store';
+import { getData, mutate, useData } from './store';
 
-// To-do lists: several named lists, one shown at a time. Items are ticked off into a Done section.
-
-// The list being shown, kept while the app is open.
-let shownList: string | null = null;
+// To-do lists. The screen opens on an overview of all lists; opening one tints the screen with the
+// list's color. The title menu switches between lists.
 
 function removeItem(item: TodoItem): void {
   const copy = structuredClone(item);
@@ -66,95 +64,155 @@ function TodoRow(props: { item: TodoItem }) {
   );
 }
 
-function NameForm(props: { initial: string; action: string; onSave: (name: string) => void; close: () => void }) {
-  const [name, setName] = useState(props.initial);
+/** Name and color of a list, for creating or editing it. */
+function ListForm(props: { list?: TodoList; action: string; onSave: (name: string, color: string) => void; close: () => void }) {
+  const [name, setName] = useState(props.list?.name ?? '');
+  const [color, setColor] = useState(props.list?.color ?? nextListColor(getData()));
   const input = useRef<HTMLInputElement>(null);
-  useEffect(() => input.current?.focus(), []);
+  useEffect(() => {
+    if (!props.list) input.current?.focus();
+  }, []);
   const save = () => {
     if (!name.trim()) return;
-    props.onSave(name.trim());
+    props.onSave(name.trim(), color);
     props.close();
   };
   return (
     <form
-      class="stack"
+      class="stack editor"
+      style={{ '--c': color }}
       onSubmit={(e) => {
         e.preventDefault();
         save();
       }}
     >
-      <input ref={input} class="input" placeholder="Groceries, This week, Someday…" aria-label="List name" value={name} onInput={(e) => setName((e.target as HTMLInputElement).value)} />
-      <button class="btn primary" type="submit" disabled={!name.trim()}>
+      <section class="ed-group">
+        <label class="ed-label" for="list-name">
+          Name
+        </label>
+        <input id="list-name" ref={input} class="input name" placeholder="Groceries, This week, Someday…" value={name} onInput={(e) => setName((e.target as HTMLInputElement).value)} />
+      </section>
+      <section class="ed-group">
+        <span class="ed-label">Color</span>
+        <ColorPicker value={color} onChange={setColor} />
+      </section>
+      <button class="btn ed-save" type="submit" disabled={!name.trim()}>
         {props.action}
       </button>
     </form>
   );
 }
 
+function newList(onCreated: (id: string) => void): void {
+  openSheet('New list', (close) => (
+    <ListForm
+      action="Create list"
+      close={close}
+      onSave={(name, color) => {
+        let id = '';
+        mutate((d, c) => {
+          id = createTodoList(d, name, c, color).id;
+        });
+        onCreated(id);
+      }}
+    />
+  ));
+}
+
+const openCount = (todos: TodoItem[], listId: string) => todos.filter((t) => t.listId === listId && !t.done).length;
+
 export function TodoScreen() {
   const { data } = useData();
-  const [, redraw] = useState(0);
+  const [shown, setShown] = useState<string | null>(null);
+  const lists = [...data.todoLists].sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
+  const list = shown ? lists.find((l) => l.id === shown) : undefined;
+
+  // An open list tints the whole screen, the tab bar and its sheets with its color. A layout effect, so
+  // the tint is set and removed in step with the screen even when the tab changes straight away.
+  useLayoutEffect(() => {
+    const root = document.documentElement;
+    if (!list) return;
+    root.classList.add('tinted');
+    root.style.setProperty('--tint', list.color);
+    return () => {
+      root.classList.remove('tinted');
+      root.style.removeProperty('--tint');
+    };
+  }, [list?.color]);
+
+  if (!list) return <Overview lists={lists} open={setShown} />;
+  return <ListView list={list} lists={lists} show={setShown} />;
+}
+
+function Overview(props: { lists: TodoList[]; open: (id: string) => void }) {
+  const { data } = useData();
+  return (
+    <div class="screen calm">
+      <header class="calm-top">
+        <h1 class="calm-title">To-do</h1>
+        <button class="plain-btn" aria-label="New list" onClick={() => newList(props.open)}>
+          <Icon d={PLUS} size={26} />
+        </button>
+      </header>
+      {props.lists.length ? (
+        <ul class="lists">
+          {props.lists.map((l) => {
+            const n = openCount(data.todos, l.id);
+            return (
+              <li key={l.id}>
+                <button class="list-card" style={{ '--c': l.color }} onClick={() => props.open(l.id)}>
+                  <span class="list-name">{l.name}</span>
+                  <span class="list-count">{n ? `${n} to-do${n === 1 ? '' : 's'}` : 'All done'}</span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <p class="calm-empty">No lists yet. Tap + to start one.</p>
+      )}
+    </div>
+  );
+}
+
+function ListView(props: { list: TodoList; lists: TodoList[]; show: (id: string | null) => void }) {
+  const { data } = useData();
+  const { list } = props;
   const [draft, setDraft] = useState('');
   const [showDone, setShowDone] = useState(false);
   const addInput = useRef<HTMLInputElement>(null);
-  const lists = [...data.todoLists].sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
-  const list = lists.find((l) => l.id === shownList) ?? lists[0];
-  const show = (id: string | null) => {
-    shownList = id;
-    redraw((n) => n + 1);
-  };
-  const items = list ? data.todos.filter((t) => t.listId === list.id) : [];
+  const items = data.todos.filter((t) => t.listId === list.id);
   const open = items.filter((t) => !t.done).sort((a, b) => a.order - b.order || a.createdAt.localeCompare(b.createdAt));
   const done = items.filter((t) => t.done).sort((a, b) => (b.doneAt ?? '').localeCompare(a.doneAt ?? ''));
 
   const add = () => {
     const text = draft.trim();
     if (!text) return;
-    mutate((d, c) => {
-      // The first to-do creates the first list.
-      const id = list?.id ?? createTodoList(d, 'To-do', c).id;
-      addTodo(d, id, text, c);
-    });
+    mutate((d, c) => void addTodo(d, list.id, text, c));
     setDraft('');
   };
-  const newList = () =>
-    openSheet('New list', (close) => (
-      <NameForm
-        initial=""
-        action="Create list"
-        close={close}
-        onSave={(name) =>
-          mutate((d, c) => {
-            shownList = createTodoList(d, name, c).id;
-          })
-        }
-      />
-    ));
 
   const menu: MenuItem[] = [
-    ...lists.map((l) => ({ key: l.id, label: l.name, on: l.id === list?.id, run: () => show(l.id) })),
-    { key: 'new', label: 'New list…', divider: lists.length > 0, run: newList },
+    { key: 'all', label: 'All lists', run: () => props.show(null) },
+    ...props.lists.map((l, i) => ({ key: l.id, label: l.name, color: l.color, on: l.id === list.id, divider: i === 0, run: () => props.show(l.id) })),
+    { key: 'new', label: 'New list…', divider: true, run: () => newList(props.show) },
+    { key: 'edit', label: 'Edit list…', run: () => openSheet('Edit list', (close) => <ListForm list={list} action="Save" close={close} onSave={(name, color) => mutate((d, c) => updateTodoList(d, list.id, { name, color }, c))} />) },
+    {
+      key: 'delete',
+      label: 'Delete list',
+      danger: true,
+      run: () =>
+        confirmSheet(`Delete “${list.name}”?`, items.length ? `Its ${items.length} to-do${items.length === 1 ? '' : 's'} will be deleted too.` : 'The list is empty.', 'Delete list', () => {
+          mutate((d, c) => deleteTodoList(d, list.id, c));
+          props.show(null);
+        }),
+    },
   ];
-  if (list) {
-    menu.push(
-      { key: 'rename', label: 'Rename list…', run: () => openSheet('Rename list', (close) => <NameForm initial={list.name} action="Save" close={close} onSave={(name) => mutate((d, c) => renameTodoList(d, list.id, name, c))} />) },
-      {
-        key: 'delete',
-        label: 'Delete list',
-        danger: true,
-        run: () =>
-          confirmSheet(`Delete “${list.name}”?`, items.length ? `Its ${items.length} to-do${items.length === 1 ? '' : 's'} will be deleted too.` : 'The list is empty.', 'Delete list', () => {
-            mutate((d, c) => deleteTodoList(d, list.id, c));
-            show(null);
-          }),
-      },
-    );
-  }
 
   return (
     <div class="screen calm">
       <header class="calm-top">
-        <TitleMenu title={list?.name ?? 'To-do'} items={menu} label="Choose or manage lists" />
+        <TitleMenu title={list.name} tint={list.color} items={menu} label="Choose or manage lists" />
         <button class="plain-btn" aria-label="Add a to-do" onClick={() => addInput.current?.focus()}>
           <Icon d={PLUS} size={26} />
         </button>

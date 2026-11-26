@@ -34,6 +34,9 @@ later. README, `docs/DATA_FORMAT.md`, `docs/GOOGLE_SHEETS.md`, `docs/ROADMAP.md`
 - Habit colors are soft (`SOFT_COLORS`); text on them is dark. The app accent (`ACCENTS`) stays deep.
 - Journal and To-do follow the owner's "calm and minimalist" brief: a title menu top left, a thin + top
   right, plain lists, no extra chrome.
+- To-do opens on the overview of lists (`TodoScreen` keeps the open list in local state, so it resets when the
+  tab is left or tapped again). An open list tints the app by setting `--tint` and the `tinted` class on
+  `<html>`, which overrides `--bg`; this must stay a layout effect so the tint never outlives the screen.
 - Journal entries have `kind` `journal` or `note` (a note has exactly one habit in `habitIds`). Deleting a
   habit turns its notes into journal entries.
 - The seven acceptance scenarios from the PRD are tests in `tests/scenarios.test.ts`.

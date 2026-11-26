@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { BACKUP_FORMAT_VERSION, makeBackup, tables, toCsv } from '../src/core/exporter';
 import { checkBackup, mergeData, migrate, OLD_COLORS, SOFT_COLORS } from '../src/core/importer';
-import { addActivityType, addTodo, createHabit, createTodoList, deleteHabit, deleteRecord, deleteTodo, deleteTodoList, logRecord, makeMinimum, renameTodoList, saveJournal, updateTodo } from '../src/core/ops';
+import { addActivityType, addTodo, createHabit, createTodoList, deleteHabit, deleteRecord, deleteTodo, deleteTodoList, logRecord, makeMinimum, nextListColor, saveJournal, updateTodo, updateTodoList } from '../src/core/ops';
 import type { AppData } from '../src/core/types';
 import { sheetsBackup, sheetsRestore } from '../src/core/sheets';
 import { crc32, zip } from '../src/core/zip';
@@ -209,7 +209,7 @@ describe('schema 3', () => {
     const checked = checkBackup(JSON.stringify({ ...makeBackup(data, 'now', '0.2.0', 'UTC'), data: old }));
     expect(checked.ok).toBe(true);
     const up = checked.backup!.data;
-    expect(up.schemaVersion).toBe(3);
+    expect(up.schemaVersion).toBe(4);
     expect([up.todoLists, up.todos]).toEqual([[], []]);
     expect(up.habits.find((h) => h.id === habit.id)!.color).toBe(SOFT_COLORS[OLD_COLORS.indexOf(habit.color)]);
     expect(up.habits.find((h) => h.id === custom.id)!.color).toBe('#123456');
@@ -236,7 +236,7 @@ describe('schema 3', () => {
     const c2 = clockAt('2026-11-21');
     updateTodo(data, milk.id, { done: true }, c2);
     expect(data.todos.find((t) => t.id === milk.id)).toMatchObject({ done: true, doneAt: c2.now, updatedAt: c2.now });
-    renameTodoList(data, list.id, 'Shop', c2);
+    updateTodoList(data, list.id, { name: 'Shop' }, c2);
     deleteTodo(data, eggs.id, c2);
 
     const merged = mergeData(data, backup);
@@ -264,5 +264,38 @@ describe('schema 3', () => {
     expect(makeMinimum(null, 'a short walk', true)).toEqual({ label: 'a short walk', countsAsComplete: true, unit: 'a short walk' });
     expect(makeMinimum(5, '', false)).toEqual({ label: '5', countsAsComplete: false, amount: 5 });
     expect(makeMinimum(null, '  ', false)).toBeNull();
+  });
+});
+
+describe('schema 4', () => {
+  it('gives each to-do list from a version 3 backup a color, in list order', () => {
+    const data = freshData();
+    const c = clockAt('2026-11-20');
+    const a = createTodoList(data, 'Home', c);
+    const b = createTodoList(data, 'Work', c);
+    addTodo(data, a.id, 'Fix the tap', c);
+    const old = structuredClone(data) as unknown as { schemaVersion: number; todoLists: { color?: string }[] };
+    old.schemaVersion = 3;
+    for (const l of old.todoLists) delete l.color;
+    const checked = checkBackup(JSON.stringify({ ...makeBackup(data, 'now', '0.3.0', 'UTC'), data: old }));
+    expect(checked.ok).toBe(true);
+    expect(checked.backup!.data.todoLists.map((l) => [l.id, l.color])).toEqual([
+      [a.id, SOFT_COLORS[0]],
+      [b.id, SOFT_COLORS[1]],
+    ]);
+  });
+
+  it("picks an unused color for a new list, and can change a list's color", () => {
+    const data = freshData();
+    const c = clockAt('2026-11-20');
+    const first = createTodoList(data, 'Home', c);
+    expect(first.color).toBe(SOFT_COLORS[0]);
+    createTodoList(data, 'Gifts', c, SOFT_COLORS[1]);
+    expect(nextListColor(data)).toBe(SOFT_COLORS[2]);
+    const later = clockAt('2026-11-21');
+    updateTodoList(data, first.id, { color: SOFT_COLORS[5] }, later);
+    expect(first).toMatchObject({ color: SOFT_COLORS[5], name: 'Home', updatedAt: later.now });
+    const lists = tables(data).find((t) => t.name === 'todo_lists')!;
+    expect(lists.rows[0][lists.header.indexOf('color')]).toBe(SOFT_COLORS[5]);
   });
 });
