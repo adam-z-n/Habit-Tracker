@@ -10,12 +10,12 @@ permissions:
 concurrency:
   group: pages
   cancel-in-progress: true
+# Two jobs, as in GitHub's own Pages workflow: the site is uploaded once by `build`, and `deploy`
+# starts only after that upload is complete. Re-running a failed `deploy` reuses the same upload,
+# so "Re-run failed jobs" works (a single job could leave two uploads with the same name).
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -30,5 +30,12 @@ jobs:
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
       - id: deployment
         uses: actions/deploy-pages@v4
