@@ -2,6 +2,10 @@ import { isDay } from './dates';
 import { BACKUP_FORMAT, BACKUP_FORMAT_VERSION, type Backup } from './exporter';
 import { defaultSettings, SCHEMA_VERSION, type AppData, type Tombstone } from './types';
 
+/** The habit colors before 0.3.0, and the softer colors that replace them, in the same order. */
+export const OLD_COLORS = ['#2f6f5e', '#3f8f6b', '#5aa9a3', '#4a7fc1', '#5b63c7', '#8a6fc9', '#c75b7a', '#d9584a', '#e08a3c', '#c9a227', '#7d8a99', '#4b5563'];
+export const SOFT_COLORS = ['#7fb39a', '#93c47d', '#72bdb5', '#7eaee0', '#9aa1e6', '#b39ae0', '#e89bb3', '#f0998a', '#f4b27a', '#ecca6a', '#a3b0bd', '#9a9fa8'];
+
 // Restoring a backup: check it, describe it, then either replace the current data or merge into it.
 
 /**
@@ -14,6 +18,15 @@ export function migrate(data: AppData): AppData {
     // Version 2 tells journal entries and habit notes apart; everything written before is a journal entry.
     for (const entry of out.journal) entry.kind ??= 'journal';
   }
+  if (out.schemaVersion < 3) {
+    // Version 3 adds to-do lists, and moves habits on the old palette to the softer one.
+    for (const habit of out.habits) {
+      const i = OLD_COLORS.indexOf(habit.color.toLowerCase());
+      if (i >= 0) habit.color = SOFT_COLORS[i];
+    }
+  }
+  out.todoLists ??= [];
+  out.todos ??= [];
   out.schemaVersion = SCHEMA_VERSION;
   return out;
 }
@@ -30,6 +43,7 @@ export interface Checked {
     records: number;
     journal: number;
     reminders: number;
+    todos: number;
     firstDay: string | null;
     lastDay: string | null;
   };
@@ -63,6 +77,11 @@ export function checkBackup(text: string): Checked {
     if (!Array.isArray(data[key])) errors.push(`The backup is missing its list of ${key}.`);
     else if (!(data[key] as unknown[]).every((item) => isObject(item) && typeof item.id === 'string' && item.id)) {
       errors.push(`Some ${key} in the backup have no id.`);
+    }
+  }
+  for (const key of ['todoLists', 'todos'] as const) {
+    if (data[key] !== undefined && !(Array.isArray(data[key]) && (data[key] as unknown[]).every((item) => isObject(item) && typeof item.id === 'string' && item.id))) {
+      errors.push(`The backup's list of ${key} is damaged.`);
     }
   }
   if (errors.length) return { ok: false, errors, warnings };
@@ -100,6 +119,7 @@ export function checkBackup(text: string): Checked {
       records: d.records.length,
       journal: d.journal.length,
       reminders: d.reminders.length,
+      todos: d.todos.length,
       firstDay: days[0] ?? null,
       lastDay: days[days.length - 1] ?? null,
     },
@@ -136,6 +156,8 @@ export function mergeData(mine: AppData, theirs: AppData): AppData {
     records: mergeList(mine.records, theirs.records, deleted),
     journal: mergeList(mine.journal, theirs.journal, deleted),
     reminders: mergeList(mine.reminders, theirs.reminders, deleted),
+    todoLists: mergeList(mine.todoLists, theirs.todoLists, deleted),
+    todos: mergeList(mine.todos, theirs.todos, deleted),
     settings: theirs.settings.updatedAt > mine.settings.updatedAt ? theirs.settings : mine.settings,
     deleted: tombstones,
   };

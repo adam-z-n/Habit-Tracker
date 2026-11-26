@@ -3,7 +3,7 @@
 /** A local calendar day, `YYYY-MM-DD`. */
 export type Day = string;
 
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 export type Frequency =
   | { type: 'daily' }
@@ -41,9 +41,14 @@ export interface FieldDef {
 }
 
 export interface Minimum {
+  /** How the smallest unit reads, e.g. "1 page". Kept in step with `amount` and `unit`. */
   label: string;
   /** When true, doing the smallest unit counts as completing the habit. */
   countsAsComplete: boolean;
+  /** The number part of the smallest unit, if one was given (schema 3). */
+  amount?: number;
+  /** What the number counts, e.g. "page" or "minutes" (schema 3). */
+  unit?: string;
 }
 
 export type HabitStatus = 'active' | 'paused' | 'archived';
@@ -131,6 +136,27 @@ export interface Reminder {
   updatedAt: string;
 }
 
+/** A named to-do list (schema 3). */
+export interface TodoList {
+  id: string;
+  name: string;
+  order: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TodoItem {
+  id: string;
+  listId: string;
+  text: string;
+  done: boolean;
+  /** When it was ticked off; null while open. */
+  doneAt: string | null;
+  order: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Settings {
   theme: 'auto' | 'light' | 'dark';
   accent: string;
@@ -154,6 +180,8 @@ export interface AppData {
   records: ActivityRecord[];
   journal: JournalEntry[];
   reminders: Reminder[];
+  todoLists: TodoList[];
+  todos: TodoItem[];
   settings: Settings;
   deleted: Tombstone[];
 }
@@ -178,6 +206,8 @@ export function emptyData(now: string): AppData {
     records: [],
     journal: [],
     reminders: [],
+    todoLists: [],
+    todos: [],
     settings: defaultSettings(now),
     deleted: [],
   };

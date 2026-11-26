@@ -5,8 +5,7 @@ import { checkBackup, mergeData, type Checked } from '../core/importer';
 import { sheetsPing, sheetsRestore } from '../core/sheets';
 import type { Settings } from '../core/types';
 import { zip } from '../core/zip';
-import { ColorPicker, Field, saveFile, Segmented } from './common';
-import { remindersIcs } from './reminders';
+import { ACCENTS, ColorPicker, Field, saveFile, Segmented } from './common';
 import { confirmSheet, openSheet, toast } from './sheet';
 import { APP_VERSION, backupNow, clock, eraseAll, getData, hasSnapshot, mutate, replaceData, setSync, undoRestore, useData, type SyncState } from './store';
 
@@ -69,7 +68,8 @@ function Restore(props: { checked: Checked; source: string; close: () => void })
           {n(s.records, 'activity record')}
           {s.firstDay && s.lastDay ? ` from ${formatDay(s.firstDay)} to ${formatDay(s.lastDay)}` : ''}
         </li>
-        <li>{n(s.journal, 'journal entry').replace('entrys', 'entries')} and {n(s.reminders, 'reminder')}</li>
+        <li>{n(s.journal, 'journal entry').replace('entrys', 'entries')}</li>
+        <li>{n(s.todos, 'to-do')}</li>
         <li>Your preferences</li>
       </ul>
       {checked.warnings.map((w) => (
@@ -103,7 +103,6 @@ export function SettingsScreen() {
   const { data, sync } = useData();
   const fileInput = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState('');
-  const [permission, setPermission] = useState(typeof Notification === 'undefined' ? 'unsupported' : Notification.permission);
   const set = (patch: Partial<Settings>) => mutate((d, c) => Object.assign(d.settings, patch, { updatedAt: c.now }));
   const s = data.settings;
 
@@ -146,7 +145,7 @@ export function SettingsScreen() {
           />
         </Field>
         <Field group label="Accent color">
-          <ColorPicker value={s.accent} onChange={(accent) => set({ accent })} />
+          <ColorPicker value={s.accent} palette={ACCENTS} onChange={(accent) => set({ accent })} />
         </Field>
         <Field group label="Habit list">
           <Segmented
@@ -192,23 +191,6 @@ export function SettingsScreen() {
             ]}
           />
         </Field>
-      </section>
-
-      <section class="card pad stack">
-        <h3>Reminders</h3>
-        <p class="muted small">Reminders are set on each habit. They appear while the app is open or running in the background; a web app cannot wake itself when fully closed.</p>
-        {permission === 'default' && (
-          <button class="btn" onClick={() => void Notification.requestPermission().then(setPermission)}>
-            Allow notifications
-          </button>
-        )}
-        {permission === 'granted' && <p class="muted small">Notifications are allowed.</p>}
-        {permission === 'denied' && <p class="muted small">Notifications are blocked for this site in the browser's settings. Reminders will show inside the app only.</p>}
-        {permission === 'unsupported' && <p class="muted small">This browser does not offer notifications here. On iPhone, add the app to the Home Screen first.</p>}
-        <button class="btn" disabled={!data.reminders.length} onClick={() => void saveFile(`habit-reminders-${stamp()}.ics`, remindersIcs(data), 'text/calendar')}>
-          Add reminders to my calendar
-        </button>
-        <p class="muted small">Downloads a calendar file with your {data.reminders.length || ''} reminder{data.reminders.length === 1 ? '' : 's'} as repeating alerts, so your phone reminds you even when the app is closed.</p>
       </section>
 
       <section class="card pad stack">

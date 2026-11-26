@@ -8,7 +8,7 @@
  *   4. Copy the web app address (ends in /exec) and the passphrase into the app's Settings.
  *
  * Each backup rewrites the readable tabs (habits, activity_types, activity_records,
- * habit_completions, journal_entries) and stores the complete backup in the _backup tab,
+ * habit_completions, journal_entries, todo_lists, todo_items) and stores the complete backup in the _backup tab,
  * which is what Restore reads. Do not edit the _backup tab.
  */
 var SECRET = 'change-me';
