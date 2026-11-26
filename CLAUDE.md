@@ -49,4 +49,7 @@ later. README, `docs/DATA_FORMAT.md`, `docs/GOOGLE_SHEETS.md`, `docs/ROADMAP.md`
   `devices['iPhone 15 Pro']` with `viewport: { width: 402, height: 874 }`, `deviceScaleFactor: 3`. Seed data by
   writing `habits:data` to localStorage.
 - Never push to `main`; one PR per round of changes. Keep `CHANGELOG.md` and `docs/ROADMAP.md` current.
+- Deploys: `.github/workflows/deploy.yml` has a `build` job (uploads the site once) and a `deploy` job. If a
+  deploy fails, "Re-run failed jobs" is safe; or start a fresh run with workflow_dispatch. Check them through the
+  GitHub Actions tools; this sandbox cannot load the site.
 - The Google Sheets backup has only been tested against the fake, not a live deployment (as of 0.3.0).
