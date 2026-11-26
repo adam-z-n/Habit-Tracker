@@ -891,8 +891,21 @@ textarea.input {
   text-overflow: ellipsis;
 }
 .wsub {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
   font-size: 13.5px;
   color: var(--muted);
+}
+.wmin {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wprogress {
+  flex: none;
 }
 .wsub b {
   color: var(--text);
