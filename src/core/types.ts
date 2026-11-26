@@ -3,7 +3,7 @@
 /** A local calendar day, `YYYY-MM-DD`. */
 export type Day = string;
 
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 export type Frequency =
   | { type: 'daily' }
@@ -66,6 +66,8 @@ export interface Habit {
   goals: Goal[];
   minimum: Minimum | null;
   fields: FieldDef[];
+  /** To-do lists whose items complete this habit for the day they are ticked off (schema 5). */
+  todoListIds: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -108,6 +110,8 @@ export interface ActivityRecord {
   level: 'full' | 'min';
   values: RecordValue[];
   note: string;
+  /** The to-do whose ticking off made this record, if any; unticking it removes the record (schema 5). */
+  todoId?: string;
   createdAt: string;
   updatedAt: string;
 }

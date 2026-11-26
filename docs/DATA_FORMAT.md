@@ -8,9 +8,9 @@ it in an envelope:
   "format": "habit-tracker-backup",
   "formatVersion": 1,
   "exportedAt": "2026-11-15T14:03:22.120Z",
-  "appVersion": "0.4.0",
+  "appVersion": "0.5.0",
   "timeZone": "America/New_York",
-  "data": { "schemaVersion": 4, "habits": [], "activityTypes": [], "records": [], "journal": [], "reminders": [], "todoLists": [], "todos": [], "settings": {}, "deleted": [] }
+  "data": { "schemaVersion": 5, "habits": [], "activityTypes": [], "records": [], "journal": [], "reminders": [], "todoLists": [], "todos": [], "settings": {}, "deleted": [] }
 }
 ```
 
@@ -21,7 +21,8 @@ to update.
 Schema versions: 1 was the first; 2 added `kind` to journal entries (older entries become `journal`); 3 added
 `todoLists` and `todos`, the optional `amount` and `unit` of `minimum`, and moved habits whose color was on the
 pre-0.3 palette to the matching softer color (`OLD_COLORS` to `SOFT_COLORS` in `src/core/importer.ts`; other
-colors are left alone); 4 gave each to-do list a `color`, assigned in list order from the habit palette.
+colors are left alone); 4 gave each to-do list a `color`, assigned in list order from the habit palette; 5 added `todoListIds` to habits
+(empty for older habits) and the optional `todoId` to records.
 
 ## Conventions
 
@@ -35,14 +36,14 @@ colors are left alone); 4 gave each to-do list a `color`, assigned in list order
 
 | Entity | Key fields |
 | --- | --- |
-| `habits[]` | `id`, `name`, `description`, `icon`, `color`, `category`, `startDate`, `status` (`active`, `paused`, `archived`), `order`, `goals[]`, `minimum`, `fields[]` |
+| `habits[]` | `id`, `name`, `description`, `icon`, `color`, `category`, `startDate`, `status` (`active`, `paused`, `archived`), `order`, `goals[]`, `minimum`, `fields[]`, `todoListIds[]` (to-do lists whose items complete the habit) |
 | `habits[].goals[]` | `from` (day), `frequency`, `target`. A habit's goal history; the last entry is the current goal. Each day is judged by the goal in effect on that day. |
 | `frequency` | `{type:"daily"}`, `{type:"weekdays",days:[0-6]}` (0 is Sunday), `{type:"perWeek",times}`, `{type:"perMonth",times}`, `{type:"interval",every}` (every N days from the start date) |
 | `target` | `{fieldId, amount}`: an amount to reach each day, summed over one number field. Or `null`. |
 | `minimum` | `{label, countsAsComplete, amount?, unit?}`: the smallest-unit version of the habit, e.g. `amount` 1 and `unit` "page", with `label` "1 page". Older data may have only `label`. Or `null`. |
 | `habits[].fields[]` | Measurements: `id`, `name`, `kind` (`number`, `choice`, `text`), `unit`, `precision`, `options[]`, `required`, `archived` |
 | `activityTypes[]` | `id`, `habitId`, `name`, `icon`, `color`, `fieldIds` (which fields it uses; `null` is all), `defaults` (values for one-tap logging), `order`, `archived` |
-| `records[]` | One activity event: `id`, `habitId`, `activityTypeId` (or `null`), `date`, `time`, `tz`, `level` (`full` or `min`), `values[]` (`{fieldId, value, unit}`), `note` |
+| `records[]` | One activity event: `id`, `habitId`, `activityTypeId` (or `null`), `date`, `time`, `tz`, `level` (`full` or `min`), `values[]` (`{fieldId, value, unit}`), `note`, `todoId` (set when ticking off that to-do made the record; unticking it deletes the record) |
 | `journal[]` | `id`, `kind` (`journal`, or `note` for a note about one habit, whose id is then the only entry in `habitIds`), `date`, `text`, `mood` (1–5 or `null`), `habitIds[]` |
 | `reminders[]` | `id`, `habitId`, `time`, `days[]`, `text`, `enabled`. Kept for older data; since 0.3.0 the app no longer shows or edits reminders. |
 | `todoLists[]` | `id`, `name`, `color` (one of the habit colors), `order` |

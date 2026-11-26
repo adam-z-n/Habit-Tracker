@@ -28,6 +28,7 @@ export interface HabitInput {
   target?: Target | null;
   fields?: FieldDef[];
   minimum?: Habit['minimum'];
+  todoListIds?: string[];
 }
 
 export function createHabit(data: AppData, input: HabitInput, clock: Clock): Habit {
@@ -44,6 +45,7 @@ export function createHabit(data: AppData, input: HabitInput, clock: Clock): Hab
     goals: [{ from: input.startDate ?? clock.today, frequency: input.frequency ?? { type: 'daily' }, target: input.target ?? null }],
     minimum: input.minimum ?? null,
     fields: input.fields ?? [],
+    todoListIds: input.todoListIds ?? [],
     createdAt: clock.now,
     updatedAt: clock.now,
   };
@@ -97,6 +99,7 @@ export interface RecordInput {
   level?: 'full' | 'min';
   values?: RecordValue[];
   note?: string;
+  todoId?: string;
 }
 
 export function logRecord(data: AppData, input: RecordInput, clock: Clock): ActivityRecord {
@@ -111,6 +114,7 @@ export function logRecord(data: AppData, input: RecordInput, clock: Clock): Acti
     level: input.level ?? 'full',
     values: input.values ?? [],
     note: input.note ?? '',
+    ...(input.todoId ? { todoId: input.todoId } : {}),
     createdAt: clock.now,
     updatedAt: clock.now,
   };
@@ -269,8 +273,11 @@ export function updateTodoList(data: AppData, id: string, patch: { name?: string
   if (patch.color && patch.color !== list.color) Object.assign(list, { color: patch.color, updatedAt: clock.now });
 }
 
-/** Deletes a list and everything on it. */
+/** Deletes a list and everything on it, and unlinks it from habits. Records it already made are kept. */
 export function deleteTodoList(data: AppData, id: string, clock: Clock): void {
+  for (const habit of data.habits) {
+    if (habit.todoListIds.includes(id)) Object.assign(habit, { todoListIds: habit.todoListIds.filter((x) => x !== id), updatedAt: clock.now });
+  }
   for (const item of data.todos) if (item.listId === id) bury(data, item.id, clock);
   data.todos = data.todos.filter((t) => t.listId !== id);
   if (data.todoLists.some((l) => l.id === id)) bury(data, id, clock);
@@ -287,7 +294,18 @@ export function updateTodo(data: AppData, id: string, patch: { text?: string; do
   const item = data.todos.find((t) => t.id === id);
   if (!item) return;
   if (patch.text !== undefined && patch.text.trim() !== item.text) Object.assign(item, { text: patch.text.trim(), updatedAt: clock.now });
-  if (patch.done !== undefined && patch.done !== item.done) Object.assign(item, { done: patch.done, doneAt: patch.done ? clock.now : null, updatedAt: clock.now });
+  if (patch.done !== undefined && patch.done !== item.done) {
+    Object.assign(item, { done: patch.done, doneAt: patch.done ? clock.now : null, updatedAt: clock.now });
+    if (patch.done) {
+      // Ticking off an item completes today for every active habit linked to its list.
+      for (const habit of data.habits) {
+        if (habit.status === 'active' && habit.todoListIds.includes(item.listId)) logRecord(data, { habitId: habit.id, date: clock.today, todoId: item.id }, clock);
+      }
+    } else {
+      // Unticking it takes back exactly the records it made, so other check marks that day stay.
+      for (const rec of data.records.filter((r) => r.todoId === item.id)) deleteRecord(data, rec.id, clock);
+    }
+  }
 }
 
 export function deleteTodo(data: AppData, id: string, clock: Clock): void {
