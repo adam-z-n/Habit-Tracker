@@ -1,18 +1,18 @@
 import { useState } from 'preact/hooks';
-import { breakdown, describeRecord, SESSIONS } from '../core/breakdown';
+import { describeRecord } from '../core/breakdown';
 import { addDays, formatDay, formatTime, MONTH_LONG, weekday, weekStart, WEEKDAY_SHORT } from '../core/dates';
 import { deleteRecord, fieldsFor, logRecord, quickValues } from '../core/ops';
-import { currentGoal, dayInfo, describeFrequency, goalOn, habitsShownOn, isDone, isScheduled, periodInfo, recordsBetween, recordsOn, streak, unitOf, type DayStatus } from '../core/stats';
+import { currentGoal, dayInfo, describeFrequency, goalOn, isDone, isScheduled, periodInfo, recordsBetween, recordsOn, streak, unitOf, type DayStatus } from '../core/stats';
 import type { ActivityRecord, ActivityType, Day, Habit, RecordValue } from '../core/types';
 import { formatNumber } from '../core/units';
-import { Field, Segmented } from './common';
-import { Ring } from './charts';
-import { openHabitEditor, openManage } from './habitEditor';
+import { Field } from './common';
+import { openHabitEditor, openManage, type Template } from './habitEditor';
+import { openHabitStats } from './habitStats';
 import { openJournalEditor } from './journal';
-import { openHabitDetail } from './progress';
 import { confirmSheet, openSheet, toast } from './sheet';
 import { clock, mutate, useData } from './store';
 
+/** Activity types still in use. New habits have none; older habits may still have some. */
 export function activeTypes(types: ActivityType[], habitId: string): ActivityType[] {
   return types.filter((t) => t.habitId === habitId && !t.archived).sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
 }
@@ -22,10 +22,10 @@ function buzz(): void {
 }
 
 /** Logs with one tap, offering an undo. */
-function quickLog(habit: Habit, type: ActivityType | null, date: Day, level: 'full' | 'min'): void {
+function quickLog(habit: Habit, type: ActivityType | null, date: Day): void {
   let id = '';
   mutate((d, c) => {
-    id = logRecord(d, { habitId: habit.id, activityTypeId: type?.id ?? null, date, level, values: quickValues(habit, type, level) }, c).id;
+    id = logRecord(d, { habitId: habit.id, activityTypeId: type?.id ?? null, date, values: quickValues(habit, type, 'full') }, c).id;
   });
   buzz();
   toast(`${type ? type.name : habit.name} logged`, { label: 'Undo', run: () => mutate((d, c) => deleteRecord(d, id, c)) });
@@ -43,7 +43,13 @@ function removeRecord(rec: ActivityRecord): void {
   });
 }
 
-// ---- The day's checklist ----
+// ---- The week of habits ----
+
+const STARTERS: { name: Template; label: string; color: string }[] = [
+  { name: 'exercise', label: 'Exercise', color: '#f4b27a' },
+  { name: 'read', label: 'Read', color: '#7eaee0' },
+  { name: 'meditate', label: 'Meditate', color: '#b39ae0' },
+];
 
 export function TodayScreen(props: { today: Day }) {
   const { data, index } = useData();
@@ -73,7 +79,18 @@ export function TodayScreen(props: { today: Day }) {
       </header>
 
       {data.habits.length === 0 ? (
-        <DayList date={props.today} today={props.today} />
+        <div class="empty">
+          <div class="empty-art">🌱</div>
+          <h2>Start with one small habit</h2>
+          <p class="muted">Pick a starting point, or make your own with the + button.</p>
+          <div class="chips center">
+            {STARTERS.map((s) => (
+              <button key={s.name} class="chip big" onClick={() => openHabitEditor(null, s.name)}>
+                <span class="dot" style={{ background: s.color }} /> {s.label}
+              </button>
+            ))}
+          </div>
+        </div>
       ) : (
         <>
           <div class="week-head">
@@ -113,21 +130,19 @@ export function TodayScreen(props: { today: Day }) {
 }
 
 const BOLT = 'M13.5 2L4.5 13.5h6L9.5 22l9.5-12h-6.2L13.5 2z';
-const BELL = 'M18 16v-5a6 6 0 10-12 0v5l-1.5 2h15L18 16zM10 20a2 2 0 004 0';
 
 function DayMark(props: { status: DayStatus; scheduled: boolean }) {
   if (isDone(props.status)) {
     return (
-      <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
         <path d="M4.5 12.5l5 5L20 7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" />
       </svg>
     );
   }
-  if (!props.scheduled && props.status === 'none') return <span class="mark-off" />;
+  if (!props.scheduled) return <span class="mark-off" />;
   return (
-    <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
+    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
       <circle cx="12" cy="12" r="5.5" fill="none" stroke="currentColor" stroke-width="2.6" />
-      {props.status !== 'none' && <circle cx="12" cy="12" r="2.4" fill="currentColor" />}
     </svg>
   );
 }
@@ -143,14 +158,12 @@ function WeekCard(props: { habit: Habit; days: Day[]; today: Day; open: boolean;
   const goal = goalOn(habit, focus);
   const period = periodInfo(habit, index, focus, ws);
   const targetField = goal.target ? habit.fields.find((f) => f.id === goal.target!.fieldId) : undefined;
-  const hasReminder = data.reminders.some((r) => r.habitId === habit.id && r.enabled);
-  const weekRecs = recordsBetween(index, habit.id, days[0], days[6]);
-  const names: Record<DayStatus, string> = { none: 'not done', min: 'smallest unit done', partial: 'partly done', met: 'done', exceeded: 'done, goal exceeded' };
+  const names: Record<DayStatus, string> = { none: 'not done', met: 'done', exceeded: 'done, goal exceeded' };
 
   const toggle = (day: Day) => {
     const recs = recordsOn(index, habit.id, day);
     if (types.length) return openLog(habit, day);
-    if (!recs.length) return quickLog(habit, null, day, 'full');
+    if (!recs.length) return quickLog(habit, null, day);
     if (recs.length === 1 && !recs[0].note) return removeRecord(recs[0]);
     openLog(habit, day);
   };
@@ -159,7 +172,7 @@ function WeekCard(props: { habit: Habit; days: Day[]; today: Day; open: boolean;
     <div class="wcard" style={{ '--c': habit.color }}>
       <div class="wgrid">
         <span class="wstreak" aria-label={`Streak: ${run.current} ${run.unit}${run.current === 1 ? '' : 's'}`}>
-          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true">
             <path d={BOLT} fill="currentColor" />
           </svg>
           {run.current}
@@ -175,217 +188,49 @@ function WeekCard(props: { habit: Habit; days: Day[]; today: Day; open: boolean;
           );
         })}
       </div>
-      <div class="wfoot">
-        <button class="wname" onClick={props.onToggle} aria-expanded={props.open}>
-          <span class="wtitle">
-            {habit.icon} {habit.name}
+      <button class="wname" onClick={props.onToggle} aria-expanded={props.open}>
+        <span class="wtitle">{habit.name}</span>
+        {data.settings.detail === 'detailed' && (
+          <span class="wsub">
+            {period ? (
+              <>
+                <b>{period.count}</b> of {period.goal} this {period.unit}
+              </>
+            ) : goal.target && targetField ? (
+              <>
+                <b>{formatNumber(goal.target.amount)}</b> {targetField.unit ?? targetField.name.toLowerCase()}
+              </>
+            ) : (
+              describeFrequency(goal.frequency)
+            )}
           </span>
-          {data.settings.detail === 'detailed' && (
-            <span class="wsub">
-              {period ? (
-                <>
-                  <b>{period.count}</b> of {period.goal} this {period.unit}
-                </>
-              ) : goal.target && targetField ? (
-                <>
-                  <b>{formatNumber(goal.target.amount)}</b> {targetField.unit ?? targetField.name.toLowerCase()}
-                </>
-              ) : (
-                describeFrequency(goal.frequency)
-              )}
-            </span>
-          )}
-        </button>
-        <button class="wbell" onClick={() => openHabitEditor(habit.id)} aria-label={hasReminder ? `${habit.name}: reminders on. Edit habit` : `${habit.name}: no reminders. Edit habit`}>
-          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
-            <path d={BELL} fill={hasReminder ? 'currentColor' : 'none'} stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" />
-            {!hasReminder && <path d="M4 4l16 16" stroke="currentColor" stroke-width="2" stroke-linecap="round" />}
-          </svg>
-        </button>
-      </div>
-      {props.open && <HabitExpanded habit={habit} date={focus} recs={[...weekRecs].reverse()} types={types} showDate />}
-    </div>
-  );
-}
-
-const STARTERS: { name: string; icon: string; color: string; category: string; build: () => void }[] = [
-  {
-    name: 'Exercise',
-    icon: '🏃',
-    color: '#e08a3c',
-    category: 'Exercise',
-    build: () => openHabitEditor(null, 'exercise'),
-  },
-  { name: 'Read', icon: '📖', color: '#4a7fc1', category: 'Learning', build: () => openHabitEditor(null, 'read') },
-  { name: 'Meditate', icon: '🧘', color: '#8a6fc9', category: 'Mindfulness', build: () => openHabitEditor(null, 'meditate') },
-];
-
-export function DayList(props: { date: Day; today: Day; only?: (habit: Habit) => boolean }) {
-  const { data, index } = useData();
-  const [open, setOpen] = useState<string | null>(null);
-  let habits = habitsShownOn(data, index, props.date);
-  if (props.only) habits = habits.filter(props.only);
-  if (!data.habits.length) {
-    return (
-      <div class="empty">
-        <div class="empty-art">🌱</div>
-        <h2>Start with one small habit</h2>
-        <p class="muted">Pick a starting point, or make your own with the + button.</p>
-        <div class="chips center">
-          {STARTERS.map((s) => (
-            <button key={s.name} class="chip big" onClick={s.build}>
-              <span>{s.icon}</span> {s.name}
-            </button>
-          ))}
-        </div>
-      </div>
-    );
-  }
-  if (!habits.length) return <p class="muted pad">No habits for this day.</p>;
-  const due = habits.filter((h) => isScheduled(h, props.date) || recordsOn(index, h.id, props.date).length > 0 || periodInfo(h, index, props.date, data.settings.weekStart));
-  const rest = habits.filter((h) => !due.includes(h));
-  return (
-    <div class="habit-list">
-      {due.map((habit) => (
-        <HabitCard key={habit.id} habit={habit} date={props.date} today={props.today} open={open === habit.id} onToggle={() => setOpen(open === habit.id ? null : habit.id)} />
-      ))}
-      {rest.length > 0 && <div class="list-label">Not scheduled for this day</div>}
-      {rest.map((habit) => (
-        <HabitCard key={habit.id} habit={habit} date={props.date} today={props.today} open={open === habit.id} onToggle={() => setOpen(open === habit.id ? null : habit.id)} dim />
-      ))}
-    </div>
-  );
-}
-
-function CheckMark(props: { status: DayStatus; fraction: number; color: string }) {
-  const done = isDone(props.status);
-  return (
-    <span class={`check ${props.status}`} style={{ '--c': props.color }}>
-      {!done && props.fraction > 0 && <Ring value={props.fraction} size={44} stroke={4} color={props.color} />}
-      {done ? (
-        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
-          <path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" />
-        </svg>
-      ) : props.status === 'min' ? (
-        <span class="check-dot" />
-      ) : null}
-      {props.status === 'exceeded' && <span class="plus">+</span>}
-    </span>
-  );
-}
-
-function HabitCard(props: { habit: Habit; date: Day; today: Day; open: boolean; onToggle: () => void; dim?: boolean }) {
-  const { habit, date } = props;
-  const { data, index } = useData();
-  const recs = recordsOn(index, habit.id, date);
-  const goal = goalOn(habit, date);
-  const info = dayInfo(habit, recs, goal);
-  const period = periodInfo(habit, index, date, data.settings.weekStart);
-  const types = activeTypes(data.activityTypes, habit.id);
-  const run = streak(habit, index, props.today, data.settings.weekStart);
-  const targetField = goal.target ? habit.fields.find((f) => f.id === goal.target!.fieldId) : undefined;
-
-  // What the check button shows: the day for daily goals, the week or month for the others.
-  const status: DayStatus = period ? (isDone(period.status) ? period.status : recs.length ? 'partial' : 'none') : info.status;
-  const fraction = period ? Math.min(1, period.count / period.goal) : info.target ? Math.min(1, info.amount / info.target) : info.status === 'min' ? 0.5 : 0;
-
-  const bits: string[] = [];
-  if (period) bits.push(`${period.count} of ${period.goal} this ${period.unit}`);
-  else if (info.target !== null) bits.push(`${formatNumber(info.amount)}/${formatNumber(info.target)} ${targetField?.unit ?? ''}`.trim());
-  else if (info.status === 'min') bits.push(habit.minimum?.label || 'Smallest unit');
-  if (run.current > 0) bits.push(`🔥 ${run.current} ${run.unit}${run.current === 1 ? '' : 's'}`);
-  if (!bits.length) bits.push(describeFrequency(goal.frequency));
-
-  const onCheck = () => {
-    if (types.length) return openLog(habit, date);
-    if (!recs.length) return quickLog(habit, null, date, 'full');
-    if (recs.length === 1 && !recs[0].note && recs[0].level === 'full') return removeRecord(recs[0]);
-    openLog(habit, date);
-  };
-
-  return (
-    <div class={`card habit${props.dim ? ' dim' : ''}${isDone(status) ? ' done' : ''}`} style={{ '--c': habit.color }}>
-      <div class="habit-row">
-        <button class="habit-main" onClick={props.onToggle} aria-expanded={props.open}>
-          <span class="tile">{habit.icon}</span>
-          <span class="habit-text">
-            <span class="habit-name">{habit.name}</span>
-            {data.settings.detail === 'detailed' && <span class="habit-sub">{bits.join('  ·  ')}</span>}
-          </span>
-        </button>
-        <button class="check-btn" onClick={onCheck} aria-label={`${isDone(status) ? 'Done' : 'Log'}: ${habit.name}`}>
-          <CheckMark status={status} fraction={fraction} color={habit.color} />
-        </button>
-      </div>
-      {props.open && <HabitExpanded habit={habit} date={date} recs={recs} types={types} />}
-    </div>
-  );
-}
-
-function HabitExpanded(props: { habit: Habit; date: Day; recs: ActivityRecord[]; types: ActivityType[]; showDate?: boolean }) {
-  const { habit, date, recs } = props;
-  const { data, index } = useData();
-  const period = periodInfo(habit, index, date, data.settings.weekStart);
-  const from = period ? period.from : weekStart(date, data.settings.weekStart);
-  const to = period ? period.to : addDays(from, 6);
-  const slices = props.types.length ? breakdown(habit, data.activityTypes, recordsBetween(index, habit.id, from, to), SESSIONS) : [];
-  const unit = period?.unit ?? 'week';
-  return (
-    <div class="habit-more">
-      {habit.description && <p class="muted">{habit.description}</p>}
-      {recs.length > 0 && (
-        <ul class="entries">
-          {recs.map((rec) => (
-            <RecordRow key={rec.id} habit={habit} rec={rec} showDate={props.showDate} />
-          ))}
-        </ul>
-      )}
-      {slices.length > 0 && (
-        <ul class="mini-breakdown">
-          {slices.map((s) => (
-            <li key={s.id}>
-              <span class="swatch-dot" style={{ background: s.color }} />
-              {s.name}: {s.value} session{s.value === 1 ? '' : 's'} this {unit}
-            </li>
-          ))}
-          {period && (
-            <li class="strong">
-              Overall: {period.count} of {period.goal} {period.unit === 'week' ? 'weekly' : 'monthly'} sessions
-            </li>
-          )}
-        </ul>
-      )}
-      <div class="chips">
-        <button class="chip" onClick={() => openLog(habit, date)}>
-          ＋ Log activity
-        </button>
-        {habit.minimum && (
-          <button class="chip" onClick={() => quickLog(habit, null, date, 'min')}>
-            {habit.minimum.label || 'Smallest unit'}
-          </button>
         )}
-        <button class="chip" onClick={() => openJournalEditor(null, clock().today, { kind: 'note', habitId: habit.id })}>
-          Add note
-        </button>
-        <button class="chip" onClick={() => openHabitDetail(habit.id)}>
-          Stats
-        </button>
-        <button class="chip" onClick={() => openHabitEditor(habit.id)}>
-          Edit
-        </button>
-      </div>
+      </button>
+      {props.open && (
+        <div class="chips wmore">
+          <button class="chip" onClick={() => openJournalEditor(null, clock().today, { kind: 'note', habitId: habit.id })}>
+            Add note
+          </button>
+          <button class="chip" onClick={() => openHabitStats(habit.id)}>
+            Stats
+          </button>
+          <button class="chip" onClick={() => openHabitEditor(habit.id)}>
+            Edit
+          </button>
+        </div>
+      )}
     </div>
   );
 }
 
-export function RecordRow(props: { habit: Habit; rec: ActivityRecord; showDate?: boolean }) {
+function RecordRow(props: { habit: Habit; rec: ActivityRecord; showDate?: boolean }) {
   const { data } = useData();
   const { habit, rec } = props;
   const type = rec.activityTypeId ? data.activityTypes.find((t) => t.id === rec.activityTypeId) : null;
   return (
     <li>
       <button class="entry" onClick={() => openRecordForm(habit, rec)}>
-        <span class="entry-icon">{type?.icon || habit.icon}</span>
+        <span class="entry-icon">{type?.icon || '•'}</span>
         <span class="entry-text">
           <span>{describeRecord(habit, data.activityTypes, rec)}</span>
           <span class="muted small">
@@ -398,28 +243,26 @@ export function RecordRow(props: { habit: Habit; rec: ActivityRecord; showDate?:
   );
 }
 
-// ---- Logging ----
+// ---- Logging, for habits that still have activity types ----
 
-export function openLog(habit: Habit, date: Day): void {
+function openLog(habit: Habit, date: Day): void {
   openSheet(`${habit.name}`, (close) => <LogSheet habitId={habit.id} date={date} close={close} />);
 }
 
 function LogSheet(props: { habitId: string; date: Day; close: () => void }) {
   const { data, index } = useData();
-  const [minimum, setMinimum] = useState(false);
   const habit = data.habits.find((h) => h.id === props.habitId);
   if (!habit) return null;
   const types = activeTypes(data.activityTypes, habit.id);
   const recs = recordsOn(index, habit.id, props.date);
-  const level = minimum ? 'min' : 'full';
   const goal = currentGoal(habit);
   const targetField = goal.target ? habit.fields.find((f) => f.id === goal.target!.fieldId) : undefined;
 
   const tap = (type: ActivityType | null) => {
-    const values = quickValues(habit, type, level);
+    const values = quickValues(habit, type, 'full');
     const missing = fieldsFor(habit, type).some((f) => f.required && !values.some((v) => v.fieldId === f.id));
-    if (missing) openRecordForm(habit, null, { date: props.date, typeId: type?.id ?? null, level });
-    else quickLog(habit, type, props.date, level);
+    if (missing) openRecordForm(habit, null, { date: props.date, typeId: type?.id ?? null });
+    else quickLog(habit, type, props.date);
   };
 
   return (
@@ -432,7 +275,7 @@ function LogSheet(props: { habitId: string; date: Day; close: () => void }) {
               const count = recs.filter((r) => r.activityTypeId === type.id).length;
               return (
                 <button key={type.id} class={`activity${count ? ' on' : ''}`} style={{ '--c': type.color || habit.color }} onClick={() => tap(type)}>
-                  <span class="activity-icon">{type.icon || habit.icon}</span>
+                  <span class="activity-icon">{type.icon || '•'}</span>
                   <span>{type.name}</span>
                   {count > 0 && <span class="badge">{count > 1 ? `✓ ${count}` : '✓'}</span>}
                 </button>
@@ -447,18 +290,10 @@ function LogSheet(props: { habitId: string; date: Day; close: () => void }) {
         </>
       ) : (
         <button class="btn primary" onClick={() => tap(null)}>
-          {minimum ? `Log: ${habit.minimum?.label || 'smallest unit'}` : goal.target && targetField ? `Log ${formatNumber(goal.target.amount)} ${targetField.unit ?? targetField.name}` : 'Mark done'}
+          {goal.target && targetField ? `Log ${formatNumber(goal.target.amount)} ${targetField.unit ?? targetField.name}` : 'Mark done'}
         </button>
       )}
-      {habit.minimum && (
-        <label class="check-row">
-          <input type="checkbox" checked={minimum} onChange={(e) => setMinimum((e.target as HTMLInputElement).checked)} />
-          <span>
-            Just the smallest unit{habit.minimum.label ? `: ${habit.minimum.label}` : ''}
-          </span>
-        </label>
-      )}
-      <button class="btn" onClick={() => openRecordForm(habit, null, { date: props.date, typeId: null, level })}>
+      <button class="btn" onClick={() => openRecordForm(habit, null, { date: props.date, typeId: null })}>
         Log with details…
       </button>
       {recs.length > 0 && (
@@ -478,18 +313,17 @@ function LogSheet(props: { habitId: string; date: Day; close: () => void }) {
   );
 }
 
-export function openRecordForm(habit: Habit, rec: ActivityRecord | null, fresh?: { date: Day; typeId: string | null; level: 'full' | 'min' }): void {
+export function openRecordForm(habit: Habit, rec: ActivityRecord | null, fresh?: { date: Day; typeId: string | null }): void {
   openSheet(rec ? 'Edit entry' : 'New entry', (close) => <RecordForm habitId={habit.id} rec={rec} fresh={fresh} close={close} />, { tall: true });
 }
 
-function RecordForm(props: { habitId: string; rec: ActivityRecord | null; fresh?: { date: Day; typeId: string | null; level: 'full' | 'min' }; close: () => void }) {
+function RecordForm(props: { habitId: string; rec: ActivityRecord | null; fresh?: { date: Day; typeId: string | null }; close: () => void }) {
   const { data } = useData();
   const habit = data.habits.find((h) => h.id === props.habitId);
   const now = clock();
   const [typeId, setTypeId] = useState<string | null>(props.rec?.activityTypeId ?? props.fresh?.typeId ?? null);
   const [date, setDate] = useState(props.rec?.date ?? props.fresh?.date ?? now.today);
   const [time, setTime] = useState(props.rec ? props.rec.time ?? '' : date === now.today ? now.time : '');
-  const [level, setLevel] = useState<'full' | 'min'>(props.rec?.level ?? props.fresh?.level ?? 'full');
   const [note, setNote] = useState(props.rec?.note ?? '');
   const [values, setValues] = useState<Record<string, string>>(() => {
     const out: Record<string, string> = {};
@@ -535,8 +369,8 @@ function RecordForm(props: { habitId: string; rec: ActivityRecord | null; fresh?
     if (!date) return setError('Pick a date.');
     mutate((d, c) => {
       const existing = props.rec ? d.records.find((r) => r.id === props.rec!.id) : undefined;
-      if (existing) Object.assign(existing, { activityTypeId: typeId, date, time: time || null, level, values: out, note: note.trim(), updatedAt: c.now });
-      else logRecord(d, { habitId: habit.id, activityTypeId: typeId, date, time: time || null, level, values: out, note: note.trim() }, c);
+      if (existing) Object.assign(existing, { activityTypeId: typeId, date, time: time || null, values: out, note: note.trim(), updatedAt: c.now });
+      else logRecord(d, { habitId: habit.id, activityTypeId: typeId, date, time: time || null, values: out, note: note.trim() }, c);
     });
     props.close();
   };
@@ -580,17 +414,6 @@ function RecordForm(props: { habitId: string; rec: ActivityRecord | null; fresh?
           )}
         </Field>
       ))}
-      {habit.minimum && (
-        <Segmented
-          label="Effort"
-          value={level}
-          onChange={setLevel}
-          options={[
-            { value: 'full', label: 'Full session' },
-            { value: 'min', label: habit.minimum.label || 'Smallest unit' },
-          ]}
-        />
-      )}
       <Field label="Notes">
         <textarea class="input" rows={2} value={note} onInput={(e) => setNote((e.target as HTMLTextAreaElement).value)} />
       </Field>

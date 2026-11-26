@@ -2,7 +2,8 @@
 
 The app can keep a copy of your data in a Google Sheet that you own. Each backup writes:
 
-- readable tabs: `habits`, `activity_types`, `activity_records`, `habit_completions`, `journal_entries`
+- readable tabs: `habits`, `activity_types`, `activity_records`, `habit_completions`, `journal_entries`,
+  `todo_lists`, `todo_items`
   (the same tables as the CSV export), and
 - a `_backup` tab holding the complete backup, which is what **Restore from sheet** reads.
 

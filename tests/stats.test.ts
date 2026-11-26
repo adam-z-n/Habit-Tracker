@@ -74,16 +74,15 @@ describe('schedules and streaks', () => {
 });
 
 describe('smallest unit', () => {
-  it('is a partial day unless the habit says it counts', () => {
+  it('counts an older smallest-unit record as a done day: there is no partly done', () => {
     const data = freshData();
     const habit = createHabit(data, { name: 'Write', minimum: { label: 'One sentence', countsAsComplete: false } }, clockAt('2026-11-02'));
     logRecord(data, { habitId: habit.id, level: 'min' }, clockAt('2026-11-02'));
-    expect(dayStatus(habit, buildIndex(data.records), '2026-11-02')).toBe('min');
-    habit.minimum!.countsAsComplete = true;
     expect(dayStatus(habit, buildIndex(data.records), '2026-11-02')).toBe('met');
+    expect(streak(habit, buildIndex(data.records), '2026-11-02', 1).current).toBe(1);
   });
 
-  it('tells minimum, target and exceeded apart on an amount goal', () => {
+  it('on an older amount goal, any activity is done and more than the amount is exceeded', () => {
     const data = freshData();
     const field = { id: 'p', name: 'Pages', kind: 'number' as const, unit: 'pages' };
     const habit = createHabit(data, { name: 'Read', fields: [field], target: { fieldId: 'p', amount: 20 }, minimum: { label: 'One page', countsAsComplete: false } }, clockAt('2026-11-02'));
@@ -94,7 +93,7 @@ describe('smallest unit', () => {
     log('2026-11-04', 8);
     log('2026-11-05', 25);
     const index = buildIndex(data.records);
-    expect(['2026-11-02', '2026-11-03', '2026-11-04', '2026-11-05', '2026-11-06'].map((d) => dayStatus(habit, index, d))).toEqual(['min', 'partial', 'met', 'exceeded', 'none']);
+    expect(['2026-11-02', '2026-11-03', '2026-11-04', '2026-11-05', '2026-11-06'].map((d) => dayStatus(habit, index, d))).toEqual(['met', 'met', 'met', 'exceeded', 'none']);
   });
 
   it('keeps the goal history in order when edited twice in a day', () => {

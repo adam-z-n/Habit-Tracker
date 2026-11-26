@@ -84,7 +84,7 @@ export function tables(data: AppData, weekStartsOn: number = data.settings.weekS
     header: ['id', 'habit_id', 'habit_name', 'period', 'period_start', 'period_end', 'status', 'completion_type', 'amount', 'goal', 'record_ids'],
     rows: [],
   };
-  const typeOf = (status: string) => (status === 'met' ? 'target' : status === 'exceeded' ? 'exceeded' : status === 'min' ? 'minimum' : 'partial');
+  const typeOf = (status: string) => (status === 'exceeded' ? 'exceeded' : status === 'met' ? 'target' : '');
   for (const habit of byOrder(data.habits)) {
     const days = index.get(habit.id);
     if (!days) continue;
@@ -115,7 +115,21 @@ export function tables(data: AppData, weekStartsOn: number = data.settings.weekS
     rows: [...data.journal].sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id)).map((j) => [j.id, j.kind, j.date, j.mood ?? '', j.text, j.habitIds.join(' '), j.createdAt, j.updatedAt]),
   };
 
-  return [habits, activityTypes, records, completions, journal];
+  const listById = new Map(data.todoLists.map((l) => [l.id, l]));
+  const todoLists: Table = {
+    name: 'todo_lists',
+    header: ['id', 'name', 'order', 'created_at', 'updated_at'],
+    rows: byOrder(data.todoLists).map((l) => [l.id, l.name, l.order, l.createdAt, l.updatedAt]),
+  };
+  const todoItems: Table = {
+    name: 'todo_items',
+    header: ['id', 'list_id', 'list_name', 'text', 'done', 'done_at', 'order', 'created_at', 'updated_at'],
+    rows: [...data.todos]
+      .sort((a, b) => (listById.get(a.listId)?.order ?? 0) - (listById.get(b.listId)?.order ?? 0) || a.listId.localeCompare(b.listId) || a.order - b.order || a.id.localeCompare(b.id))
+      .map((t) => [t.id, t.listId, listById.get(t.listId)?.name ?? '', t.text, String(t.done), t.doneAt ?? '', t.order, t.createdAt, t.updatedAt]),
+  };
+
+  return [habits, activityTypes, records, completions, journal, todoLists, todoItems];
 }
 
 function csvCell(value: string | number): string {

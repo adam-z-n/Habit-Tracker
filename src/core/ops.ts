@@ -1,4 +1,4 @@
-import type { ActivityRecord, ActivityType, AppData, Day, FieldDef, Frequency, Goal, Habit, JournalEntry, RecordValue, Reminder, Target } from './types';
+import type { ActivityRecord, ActivityType, AppData, Day, FieldDef, Frequency, Goal, Habit, JournalEntry, RecordValue, Reminder, Target, TodoItem, TodoList } from './types';
 import { currentGoal } from './stats';
 
 // Every change to the data goes through these functions. They mutate the AppData they are given
@@ -35,7 +35,7 @@ export function createHabit(data: AppData, input: HabitInput, clock: Clock): Hab
     name: input.name,
     description: input.description ?? '',
     icon: input.icon ?? '✅',
-    color: input.color ?? '#2f6f5e',
+    color: input.color ?? '#7fb39a',
     category: input.category ?? '',
     startDate: input.startDate ?? clock.today,
     status: 'active',
@@ -163,6 +163,8 @@ export function deleteHabit(data: AppData, id: string, clock: Clock): void {
   for (const entry of data.journal) {
     if (entry.habitIds.includes(id)) {
       entry.habitIds = entry.habitIds.filter((h) => h !== id);
+      // A note about the deleted habit is kept as a journal entry, so it stays visible.
+      if (entry.kind === 'note') entry.kind = 'journal';
       entry.updatedAt = clock.now;
     }
   }
@@ -232,4 +234,54 @@ export function setReminders(data: AppData, habitId: string, reminders: Reminder
   const keep = new Set(reminders.map((r) => r.id));
   for (const old of data.reminders) if (old.habitId === habitId && !keep.has(old.id)) bury(data, old.id, clock);
   data.reminders = [...data.reminders.filter((r) => r.habitId !== habitId), ...reminders];
+}
+
+/** The smallest unit from a number and what it counts; both are optional. */
+export function makeMinimum(amount: number | null, unit: string, countsAsComplete: boolean): Habit['minimum'] {
+  const what = unit.trim();
+  if (amount === null && !what) return null;
+  const label = [amount === null ? '' : String(amount), what].filter(Boolean).join(' ');
+  return { label, countsAsComplete, ...(amount === null ? {} : { amount }), ...(what ? { unit: what } : {}) };
+}
+
+// ---- To-do lists ----
+
+const nextOrder = (list: { order: number }[]) => list.reduce((max, x) => Math.max(max, x.order), -1) + 1;
+
+export function createTodoList(data: AppData, name: string, clock: Clock): TodoList {
+  const list: TodoList = { id: newId(), name: name.trim() || 'To-do', order: nextOrder(data.todoLists), createdAt: clock.now, updatedAt: clock.now };
+  data.todoLists.push(list);
+  return list;
+}
+
+export function renameTodoList(data: AppData, id: string, name: string, clock: Clock): void {
+  const list = data.todoLists.find((l) => l.id === id);
+  if (list && name.trim() && list.name !== name.trim()) Object.assign(list, { name: name.trim(), updatedAt: clock.now });
+}
+
+/** Deletes a list and everything on it. */
+export function deleteTodoList(data: AppData, id: string, clock: Clock): void {
+  for (const item of data.todos) if (item.listId === id) bury(data, item.id, clock);
+  data.todos = data.todos.filter((t) => t.listId !== id);
+  if (data.todoLists.some((l) => l.id === id)) bury(data, id, clock);
+  data.todoLists = data.todoLists.filter((l) => l.id !== id);
+}
+
+export function addTodo(data: AppData, listId: string, text: string, clock: Clock): TodoItem {
+  const item: TodoItem = { id: newId(), listId, text: text.trim(), done: false, doneAt: null, order: nextOrder(data.todos.filter((t) => t.listId === listId)), createdAt: clock.now, updatedAt: clock.now };
+  data.todos.push(item);
+  return item;
+}
+
+export function updateTodo(data: AppData, id: string, patch: { text?: string; done?: boolean }, clock: Clock): void {
+  const item = data.todos.find((t) => t.id === id);
+  if (!item) return;
+  if (patch.text !== undefined && patch.text.trim() !== item.text) Object.assign(item, { text: patch.text.trim(), updatedAt: clock.now });
+  if (patch.done !== undefined && patch.done !== item.done) Object.assign(item, { done: patch.done, doneAt: patch.done ? clock.now : null, updatedAt: clock.now });
+}
+
+export function deleteTodo(data: AppData, id: string, clock: Clock): void {
+  const before = data.todos.length;
+  data.todos = data.todos.filter((t) => t.id !== id);
+  if (data.todos.length !== before) bury(data, id, clock);
 }

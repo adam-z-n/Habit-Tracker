@@ -3,7 +3,7 @@ import { breakdown, formatMetric, metricsFor, SESSIONS } from '../src/core/break
 import { makeBackup } from '../src/core/exporter';
 import { checkBackup } from '../src/core/importer';
 import { addActivityType, createHabit, deleteRecord, logRecord, quickValues, saveJournal, setGoal } from '../src/core/ops';
-import { buildIndex, dayStatus, periodInfo, recordsBetween, streak, totals } from '../src/core/stats';
+import { buildIndex, dayStatus, isScheduled, periodInfo, recordsBetween, streak, totals } from '../src/core/stats';
 import type { AppData, FieldDef } from '../src/core/types';
 import { clockAt, freshData } from './helpers';
 
@@ -28,7 +28,7 @@ describe('acceptance scenarios', () => {
     logRecord(data, { habitId: habit.id, activityTypeId: running.id }, clockAt('2026-11-03'));
     logRecord(data, { habitId: habit.id, activityTypeId: skating.id }, clockAt('2026-11-05'));
     const index = buildIndex(data.records);
-    expect(periodInfo(habit, index, '2026-11-05', 1)).toMatchObject({ count: 2, goal: 4, status: 'partial' });
+    expect(periodInfo(habit, index, '2026-11-05', 1)).toMatchObject({ count: 2, goal: 4, status: 'none' });
     const slices = breakdown(habit, data.activityTypes, data.records, SESSIONS);
     expect(slices.map((s) => [s.name, s.value]).sort()).toEqual([
       ['Ice skating', 1],
@@ -112,13 +112,18 @@ describe('acceptance scenarios', () => {
   it('5b: changing a goal does not rewrite how earlier days were judged', () => {
     const data = freshData();
     const habit = createHabit(data, { name: 'Read', fields: [duration], target: { fieldId: 'dur', amount: 20 } }, clockAt('2026-11-02'));
-    logRecord(data, { habitId: habit.id, values: [{ fieldId: 'dur', value: 20, unit: 'min' }] }, clockAt('2026-11-02'));
-    setGoal(habit, { type: 'daily' }, { fieldId: 'dur', amount: 30 }, clockAt('2026-11-05'));
-    logRecord(data, { habitId: habit.id, values: [{ fieldId: 'dur', value: 20, unit: 'min' }] }, clockAt('2026-11-05'));
+    logRecord(data, { habitId: habit.id, values: [{ fieldId: 'dur', value: 25, unit: 'min' }] }, clockAt('2026-11-02'));
+    // From Thursday: Mondays, Wednesdays and Fridays, 30 minutes.
+    setGoal(habit, { type: 'weekdays', days: [1, 3, 5] }, { fieldId: 'dur', amount: 30 }, clockAt('2026-11-05'));
+    logRecord(data, { habitId: habit.id, values: [{ fieldId: 'dur', value: 25, unit: 'min' }] }, clockAt('2026-11-06'));
     const index = buildIndex(data.records);
     expect(habit.goals).toHaveLength(2);
-    expect(dayStatus(habit, index, '2026-11-02')).toBe('met');
-    expect(dayStatus(habit, index, '2026-11-05')).toBe('partial');
+    // 25 of 20 went over the goal of the time; 25 of 30 later is simply done (there is no "partly").
+    expect(dayStatus(habit, index, '2026-11-02')).toBe('exceeded');
+    expect(dayStatus(habit, index, '2026-11-06')).toBe('met');
+    // Tuesday the 3rd was due under the old goal; Tuesday the 10th is not under the new one.
+    expect(isScheduled(habit, '2026-11-03')).toBe(true);
+    expect(isScheduled(habit, '2026-11-10')).toBe(false);
   });
 
   it('6: a backup restores every habit, activity type, record, measurement and journal entry', () => {

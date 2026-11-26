@@ -1,8 +1,9 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { BACKUP_FORMAT_VERSION, makeBackup, tables, toCsv } from '../src/core/exporter';
-import { checkBackup, mergeData } from '../src/core/importer';
-import { addActivityType, createHabit, deleteHabit, deleteRecord, logRecord, saveJournal } from '../src/core/ops';
+import { checkBackup, mergeData, migrate, OLD_COLORS, SOFT_COLORS } from '../src/core/importer';
+import { addActivityType, addTodo, createHabit, createTodoList, deleteHabit, deleteRecord, deleteTodo, deleteTodoList, logRecord, makeMinimum, renameTodoList, saveJournal, updateTodo } from '../src/core/ops';
+import type { AppData } from '../src/core/types';
 import { sheetsBackup, sheetsRestore } from '../src/core/sheets';
 import { crc32, zip } from '../src/core/zip';
 import { clockAt, freshData } from './helpers';
@@ -21,7 +22,7 @@ describe('export', () => {
   it('writes linked tables with stable ids', () => {
     const { data, habit, run, rec } = sample();
     const all = tables(data);
-    expect(all.map((t) => t.name)).toEqual(['habits', 'activity_types', 'activity_records', 'habit_completions', 'journal_entries']);
+    expect(all.map((t) => t.name)).toEqual(['habits', 'activity_types', 'activity_records', 'habit_completions', 'journal_entries', 'todo_lists', 'todo_items']);
     const records = all[2];
     const row = records.rows[0];
     expect(row[records.header.indexOf('id')]).toBe(rec.id);
@@ -167,12 +168,18 @@ describe('Google Sheets backup', () => {
 describe('older data', () => {
   it('restores a version 1 backup, treating its journal entries as journal entries', () => {
     const { data } = sample();
-    const old = structuredClone(data) as unknown as { schemaVersion: number; journal: Record<string, unknown>[] };
+    data.habits[0].color = OLD_COLORS[3];
+    const old = structuredClone(data) as unknown as { schemaVersion: number; journal: Record<string, unknown>[]; todoLists?: unknown; todos?: unknown };
     old.schemaVersion = 1;
+    delete old.todoLists;
+    delete old.todos;
     for (const entry of old.journal) delete entry.kind;
     const checked = checkBackup(JSON.stringify({ ...makeBackup(data, '2026-11-10T00:00:00.000Z', '0.1.0', 'UTC'), data: old }));
     expect(checked.ok).toBe(true);
-    expect(checked.backup!.data).toEqual(data);
+    // The habit was on the old palette, so it moves to the matching soft color.
+    const expected = structuredClone(data);
+    for (const h of expected.habits) h.color = SOFT_COLORS[OLD_COLORS.indexOf(h.color)];
+    expect(checked.backup!.data).toEqual(JSON.parse(JSON.stringify(expected)));
   });
 
   it('refuses data from a newer schema', () => {
@@ -187,5 +194,75 @@ describe('older data', () => {
     const journal = tables(data)[4];
     const row = journal.rows.find((r) => r[journal.header.indexOf('kind')] === 'note')!;
     expect(row[journal.header.indexOf('habit_ids')]).toBe(habit.id);
+  });
+});
+
+describe('schema 3', () => {
+  it('upgrades a version 2 backup: adds to-do lists and softens old-palette colors only', () => {
+    const { data, habit } = sample();
+    habit.color = OLD_COLORS[8];
+    const custom = createHabit(data, { name: 'Custom', color: '#123456' }, clockAt('2026-11-02'));
+    const old = structuredClone(data) as Partial<AppData>;
+    old.schemaVersion = 2;
+    delete old.todoLists;
+    delete old.todos;
+    const checked = checkBackup(JSON.stringify({ ...makeBackup(data, 'now', '0.2.0', 'UTC'), data: old }));
+    expect(checked.ok).toBe(true);
+    const up = checked.backup!.data;
+    expect(up.schemaVersion).toBe(3);
+    expect([up.todoLists, up.todos]).toEqual([[], []]);
+    expect(up.habits.find((h) => h.id === habit.id)!.color).toBe(SOFT_COLORS[OLD_COLORS.indexOf(habit.color)]);
+    expect(up.habits.find((h) => h.id === custom.id)!.color).toBe('#123456');
+    expect(checked.summary!.todos).toBe(0);
+  });
+
+  it('does not recolor habits again once on version 3', () => {
+    const data = freshData();
+    const h = createHabit(data, { name: 'Run', color: OLD_COLORS[0] }, clockAt('2026-11-02'));
+    expect(migrate(data).habits[0].color).toBe(OLD_COLORS[0]);
+    expect(h.color).toBe(OLD_COLORS[0]);
+  });
+
+  it('keeps to-do lists and items, ticks them off, and remembers deletions through a merge', () => {
+    const data = freshData();
+    const c1 = clockAt('2026-11-20');
+    const list = createTodoList(data, '  Groceries ', c1);
+    expect(list.name).toBe('Groceries');
+    const milk = addTodo(data, list.id, 'Milk', c1);
+    const eggs = addTodo(data, list.id, 'Eggs', c1);
+    expect([milk.order, eggs.order]).toEqual([0, 1]);
+    const backup = structuredClone(data);
+
+    const c2 = clockAt('2026-11-21');
+    updateTodo(data, milk.id, { done: true }, c2);
+    expect(data.todos.find((t) => t.id === milk.id)).toMatchObject({ done: true, doneAt: c2.now, updatedAt: c2.now });
+    renameTodoList(data, list.id, 'Shop', c2);
+    deleteTodo(data, eggs.id, c2);
+
+    const merged = mergeData(data, backup);
+    expect(merged.todoLists.map((l) => l.name)).toEqual(['Shop']);
+    expect(merged.todos.map((t) => [t.text, t.done])).toEqual([['Milk', true]]);
+
+    const all = tables(merged);
+    const items = all.find((t) => t.name === 'todo_items')!;
+    expect(items.rows[0][items.header.indexOf('list_name')]).toBe('Shop');
+
+    deleteTodoList(data, list.id, clockAt('2026-11-22'));
+    expect([data.todoLists.length, data.todos.length]).toEqual([0, 0]);
+    expect(mergeData(data, backup).todos).toEqual([]);
+  });
+
+  it('keeps notes on a deleted habit as journal entries', () => {
+    const { data, habit } = sample();
+    const note = saveJournal(data, { kind: 'note', date: '2026-11-03', text: 'Felt strong', mood: null, habitIds: [habit.id] }, clockAt('2026-11-03'));
+    deleteHabit(data, habit.id, clockAt('2026-11-04'));
+    expect(data.journal.find((j) => j.id === note.id)).toMatchObject({ kind: 'journal', habitIds: [], text: 'Felt strong' });
+  });
+
+  it('builds the smallest unit from a number and a metric, both optional', () => {
+    expect(makeMinimum(1, ' page ', false)).toEqual({ label: '1 page', countsAsComplete: false, amount: 1, unit: 'page' });
+    expect(makeMinimum(null, 'a short walk', true)).toEqual({ label: 'a short walk', countsAsComplete: true, unit: 'a short walk' });
+    expect(makeMinimum(5, '', false)).toEqual({ label: '5', countsAsComplete: false, amount: 5 });
+    expect(makeMinimum(null, '  ', false)).toBeNull();
   });
 });

@@ -1,15 +1,13 @@
 # Habits
 
-A personal habit tracker that runs in the browser and installs to the phone's Home Screen. It keeps the
-simplicity of a daily checklist and adds one thing most trackers lack: recording *how* you did a habit.
-"Exercise" can be a run on Monday and ice skating on Saturday, and both the overall goal and the mix of
-activities are tracked.
+A personal habit tracker that runs in the browser and installs to the phone's Home Screen: a quiet weekly
+view of your habits, a journal, and to-do lists.
 
-- **Habits** – a daily checklist. One tap completes a habit; habits with activity types ask "What did you do?"
-- **Progress** – completion rates, streaks, a calendar, and per-habit breakdowns by activity (sessions, time,
-  distance, or anything else you measure), with comparison to the previous period.
-- **Journal** – optional notes with a mood and links to habits.
-- **Settings** – themes, preferences, reminders, export, restore and Google Sheets backup.
+- **Habits** – each habit across the week. Tap a day to mark it done; tap the name for Add note, Stats and
+  Edit. Stats shows the streaks and a month calendar.
+- **To-do** – several named lists; tick items off into a Done section.
+- **Journal** – the general journal, or the notes on one habit, chosen from the title menu.
+- **Settings** – theme, preferences, export, restore and Google Sheets backup.
 
 Data is stored on the device. Nothing is sent anywhere unless you export it or set up the Google Sheets
 backup, which writes to a sheet you own.
@@ -33,8 +31,8 @@ npm run build      # production build in dist/
 ```
 
 - `src/core` – the rules, with no browser code: data model (`types.ts`), completion, streaks and rates
-  (`stats.ts`), activity breakdowns (`breakdown.ts`), changes to the data (`ops.ts`), export (`exporter.ts`),
-  restore and merge (`importer.ts`), the Sheets client (`sheets.ts`).
+  (`stats.ts`), activity breakdowns (`breakdown.ts`), changes to the data including to-do lists (`ops.ts`),
+  export (`exporter.ts`), restore, migration and merge (`importer.ts`), the Sheets client (`sheets.ts`).
 - `src/ui` – the screens (Preact).
 - `apps-script/Code.gs` – the script that runs inside the user's Google Sheet.
 - `docs/DATA_FORMAT.md` – the backup and CSV formats. `docs/ROADMAP.md` – what is planned.

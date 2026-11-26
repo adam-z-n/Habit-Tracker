@@ -10,6 +10,8 @@ interface Entry {
   title: string;
   render: Render;
   tall: boolean;
+  /** A full-screen page with no header: the content draws its own. */
+  page: boolean;
 }
 
 let stack: Entry[] = [];
@@ -19,8 +21,8 @@ let toastTimer: ReturnType<typeof setTimeout> | undefined;
 const listeners = new Set<() => void>();
 const notify = () => listeners.forEach((l) => l());
 
-export function openSheet(title: string, render: Render, options: { tall?: boolean } = {}): void {
-  stack = [...stack, { id: nextId++, title, render, tall: options.tall ?? false }];
+export function openSheet(title: string, render: Render, options: { tall?: boolean; page?: boolean } = {}): void {
+  stack = [...stack, { id: nextId++, title, render, tall: options.tall ?? false, page: options.page ?? false }];
   notify();
 }
 
@@ -75,7 +77,8 @@ export function SheetHost() {
   }, []);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && stack.length) closeSheet(stack[stack.length - 1].id);
+      // A page decides for itself how to close (it may have unsaved writing).
+      if (e.key === 'Escape' && stack.length && !stack[stack.length - 1].page) closeSheet(stack[stack.length - 1].id);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -84,6 +87,13 @@ export function SheetHost() {
     <>
       {stack.map((entry) => {
         const close = () => closeSheet(entry.id);
+        if (entry.page) {
+          return (
+            <div class="page" key={entry.id} role="dialog" aria-modal="true" aria-label={entry.title}>
+              {entry.render(close)}
+            </div>
+          );
+        }
         return (
           <div class="sheet-backdrop" key={entry.id} onClick={(e) => e.target === e.currentTarget && close()}>
             <div class={`sheet${entry.tall ? ' tall' : ''}`} role="dialog" aria-modal="true" aria-label={entry.title}>
