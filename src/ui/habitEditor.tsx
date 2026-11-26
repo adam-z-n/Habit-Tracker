@@ -25,6 +25,7 @@ interface Draft {
   every: number;
   minAmount: string;
   minUnit: string;
+  todoListIds: string[];
 }
 
 const TEMPLATES: Record<Template, Partial<Draft>> = {
@@ -54,6 +55,7 @@ function draftOf(habit: Habit | null, template?: Template): Draft {
     every: f.type === 'interval' ? f.every : 2,
     minAmount,
     minUnit,
+    todoListIds: [...(habit?.todoListIds ?? [])],
   };
   return habit || !template ? draft : { ...draft, ...TEMPLATES[template] };
 }
@@ -68,6 +70,7 @@ function HabitEditor(props: { habitId: string | null; template?: Template; close
   const [d, setD] = useState<Draft>(() => draftOf(habit, props.template));
   const [error, setError] = useState('');
   const set = (patch: Partial<Draft>) => setD((old) => ({ ...old, ...patch }));
+  const lists = [...data.todoLists].sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
 
   const save = () => {
     const name = d.name.trim();
@@ -83,7 +86,9 @@ function HabitEditor(props: { habitId: string | null; template?: Template; close
       // An older habit's daily amount is kept as it was.
       if (!h) h = createHabit(data, { name, color: d.color, frequency }, c);
       else setGoal(h, frequency, currentGoal(h).target, c);
-      Object.assign(h, { name, color: d.color, status: d.status, minimum, updatedAt: c.now });
+      // Keep only lists that still exist.
+      const todoListIds = d.todoListIds.filter((id) => data.todoLists.some((l) => l.id === id));
+      Object.assign(h, { name, color: d.color, status: d.status, minimum, todoListIds, updatedAt: c.now });
     });
     props.close();
   };
@@ -153,6 +158,30 @@ function HabitEditor(props: { habitId: string | null; template?: Template; close
           <input class="input" placeholder="page, minute, push-up…" aria-label="Smallest unit: what it counts" value={d.minUnit} onInput={(e) => set({ minUnit: (e.target as HTMLInputElement).value })} />
         </div>
         <p class="muted small">The least you can do on a hard day and still keep going.</p>
+      </section>
+
+      <section class="ed-group">
+        <span class="ed-label" id="lists-label">
+          To-do lists <span class="ed-optional">optional</span>
+        </span>
+        {lists.length ? (
+          <>
+            <div class="chips" role="group" aria-labelledby="lists-label">
+              {lists.map((l) => {
+                const on = d.todoListIds.includes(l.id);
+                return (
+                  <button key={l.id} type="button" class={`chip ed-list${on ? ' on' : ''}`} style={{ '--lc': l.color }} aria-pressed={on} onClick={() => set({ todoListIds: on ? d.todoListIds.filter((x) => x !== l.id) : [...d.todoListIds, l.id] })}>
+                    <span class="dot" style={{ background: l.color }} />
+                    {l.name}
+                  </button>
+                );
+              })}
+            </div>
+            <p class="muted small">Ticking off something on a chosen list marks this habit done for that day. Unticking it takes the mark back.</p>
+          </>
+        ) : (
+          <p class="muted small">Make a to-do list first, then you can choose it here: ticking off something on it will mark this habit done for that day.</p>
+        )}
       </section>
 
       {habit && (

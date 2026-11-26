@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.0
+
+- Habits: no more dots. Each day is a circle or a check; a day the habit is not due on has a fainter circle.
+- A habit can be linked to one or more to-do lists (Edit habit, "To-do lists"). Ticking off something on a
+  linked list marks the habit done for that day; unticking it takes that mark back, leaving any other check
+  marks that day. Paused and archived habits are not affected. Deleting a ticked item, or clearing done
+  items, keeps the day done. Deleting a list unlinks it.
+- Data: schema version 5 adds `todoListIds` to habits and `todoId` to records; older data is upgraded on
+  load. The CSV export and Google Sheet gain `todo_list_ids` (habits) and `todo_id` (records) columns.
+
 ## 0.4.3
 
 - Fix: check marks added for days before a habit was created were shown but not counted. A habit starts on

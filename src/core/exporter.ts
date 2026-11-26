@@ -50,11 +50,11 @@ export function tables(data: AppData, weekStartsOn: number = data.settings.weekS
 
   const habits: Table = {
     name: 'habits',
-    header: ['id', 'name', 'description', 'icon', 'color', 'category', 'start_date', 'status', 'order', 'frequency', 'frequency_detail', 'target_amount', 'target_field', 'target_unit', 'minimum_label', 'minimum_counts_as_complete', 'goals_json', 'fields_json', 'created_at', 'updated_at'],
+    header: ['id', 'name', 'description', 'icon', 'color', 'category', 'start_date', 'status', 'order', 'frequency', 'frequency_detail', 'target_amount', 'target_field', 'target_unit', 'minimum_label', 'minimum_counts_as_complete', 'goals_json', 'fields_json', 'created_at', 'updated_at', 'todo_list_ids'],
     rows: byOrder(data.habits).map((h) => {
       const goal = h.goals[h.goals.length - 1];
       const field = goal.target ? h.fields.find((f) => f.id === goal.target!.fieldId) : undefined;
-      return [h.id, h.name, h.description, h.icon, h.color, h.category, h.startDate, h.status, h.order, ...frequencyColumns(h), goal.target ? goal.target.amount : '', field?.name ?? '', field?.unit ?? '', h.minimum?.label ?? '', h.minimum ? String(h.minimum.countsAsComplete) : '', JSON.stringify(h.goals), JSON.stringify(h.fields), h.createdAt, h.updatedAt];
+      return [h.id, h.name, h.description, h.icon, h.color, h.category, h.startDate, h.status, h.order, ...frequencyColumns(h), goal.target ? goal.target.amount : '', field?.name ?? '', field?.unit ?? '', h.minimum?.label ?? '', h.minimum ? String(h.minimum.countsAsComplete) : '', JSON.stringify(h.goals), JSON.stringify(h.fields), h.createdAt, h.updatedAt, (h.todoListIds ?? []).join(' ')];
     }),
   };
 
@@ -69,10 +69,10 @@ export function tables(data: AppData, weekStartsOn: number = data.settings.weekS
   const sortedRecords = [...data.records].sort((a, b) => a.date.localeCompare(b.date) || (a.time ?? '').localeCompare(b.time ?? '') || a.id.localeCompare(b.id));
   const records: Table = {
     name: 'activity_records',
-    header: ['id', 'habit_id', 'habit_name', 'activity_type_id', 'activity_type_name', 'date', 'time', 'time_zone', 'level', 'summary', 'values_json', 'note', 'created_at', 'updated_at'],
+    header: ['id', 'habit_id', 'habit_name', 'activity_type_id', 'activity_type_name', 'date', 'time', 'time_zone', 'level', 'summary', 'values_json', 'note', 'created_at', 'updated_at', 'todo_id'],
     rows: sortedRecords.map((r) => {
       const habit = habitById.get(r.habitId);
-      return [r.id, r.habitId, habit?.name ?? '', r.activityTypeId ?? '', r.activityTypeId ? typeById.get(r.activityTypeId)?.name ?? '' : '', r.date, r.time ?? '', r.tz, r.level, habit ? describeRecord(habit, data.activityTypes, r) : '', JSON.stringify(r.values), r.note, r.createdAt, r.updatedAt];
+      return [r.id, r.habitId, habit?.name ?? '', r.activityTypeId ?? '', r.activityTypeId ? typeById.get(r.activityTypeId)?.name ?? '' : '', r.date, r.time ?? '', r.tz, r.level, habit ? describeRecord(habit, data.activityTypes, r) : '', JSON.stringify(r.values), r.note, r.createdAt, r.updatedAt, r.todoId ?? ''];
     }),
   };
 

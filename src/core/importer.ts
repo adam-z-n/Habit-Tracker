@@ -27,6 +27,8 @@ export function migrate(data: AppData): AppData {
   }
   out.todoLists ??= [];
   out.todos ??= [];
+  // Version 5 lets a habit be completed from to-do lists.
+  for (const habit of out.habits) habit.todoListIds ??= [];
   if (out.schemaVersion < 4) {
     // Version 4 gives each to-do list a color, taken in turn from the habit palette.
     [...out.todoLists].sort((a, b) => a.order - b.order || a.id.localeCompare(b.id)).forEach((list, i) => (list.color ??= SOFT_COLORS[i % SOFT_COLORS.length]));

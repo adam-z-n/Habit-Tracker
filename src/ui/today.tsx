@@ -139,9 +139,9 @@ function DayMark(props: { status: DayStatus; scheduled: boolean }) {
       </svg>
     );
   }
-  if (!props.scheduled) return <span class="mark-off" />;
+  // Every day is a circle or a check. A day the habit is not due on gets a fainter circle.
   return (
-    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" class={props.scheduled ? undefined : 'mark-off'}>
       <circle cx="12" cy="12" r="5.5" fill="none" stroke="currentColor" stroke-width="2.6" />
     </svg>
   );

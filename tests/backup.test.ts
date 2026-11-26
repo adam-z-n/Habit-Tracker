@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { BACKUP_FORMAT_VERSION, makeBackup, tables, toCsv } from '../src/core/exporter';
 import { checkBackup, mergeData, migrate, OLD_COLORS, SOFT_COLORS } from '../src/core/importer';
 import { addActivityType, addTodo, createHabit, createTodoList, deleteHabit, deleteRecord, deleteTodo, deleteTodoList, logRecord, makeMinimum, nextListColor, saveJournal, updateTodo, updateTodoList } from '../src/core/ops';
-import type { AppData } from '../src/core/types';
+import { SCHEMA_VERSION, type AppData } from '../src/core/types';
 import { sheetsBackup, sheetsRestore } from '../src/core/sheets';
 import { crc32, zip } from '../src/core/zip';
 import { clockAt, freshData } from './helpers';
@@ -209,7 +209,7 @@ describe('schema 3', () => {
     const checked = checkBackup(JSON.stringify({ ...makeBackup(data, 'now', '0.2.0', 'UTC'), data: old }));
     expect(checked.ok).toBe(true);
     const up = checked.backup!.data;
-    expect(up.schemaVersion).toBe(4);
+    expect(up.schemaVersion).toBe(SCHEMA_VERSION);
     expect([up.todoLists, up.todos]).toEqual([[], []]);
     expect(up.habits.find((h) => h.id === habit.id)!.color).toBe(SOFT_COLORS[OLD_COLORS.indexOf(habit.color)]);
     expect(up.habits.find((h) => h.id === custom.id)!.color).toBe('#123456');
