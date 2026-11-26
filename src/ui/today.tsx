@@ -5,7 +5,7 @@ import { deleteRecord, fieldsFor, logRecord, quickValues } from '../core/ops';
 import { currentGoal, dayInfo, describeFrequency, goalOn, isDone, isScheduled, periodInfo, recordsBetween, recordsOn, streak, unitOf, type DayStatus } from '../core/stats';
 import type { ActivityRecord, ActivityType, Day, Habit, RecordValue } from '../core/types';
 import { formatNumber } from '../core/units';
-import { Field, Segmented } from './common';
+import { Field } from './common';
 import { openHabitEditor, openManage, type Template } from './habitEditor';
 import { openHabitStats } from './habitStats';
 import { openJournalEditor } from './journal';
@@ -22,10 +22,10 @@ function buzz(): void {
 }
 
 /** Logs with one tap, offering an undo. */
-function quickLog(habit: Habit, type: ActivityType | null, date: Day, level: 'full' | 'min'): void {
+function quickLog(habit: Habit, type: ActivityType | null, date: Day): void {
   let id = '';
   mutate((d, c) => {
-    id = logRecord(d, { habitId: habit.id, activityTypeId: type?.id ?? null, date, level, values: quickValues(habit, type, level) }, c).id;
+    id = logRecord(d, { habitId: habit.id, activityTypeId: type?.id ?? null, date, values: quickValues(habit, type, 'full') }, c).id;
   });
   buzz();
   toast(`${type ? type.name : habit.name} logged`, { label: 'Undo', run: () => mutate((d, c) => deleteRecord(d, id, c)) });
@@ -139,11 +139,10 @@ function DayMark(props: { status: DayStatus; scheduled: boolean }) {
       </svg>
     );
   }
-  if (!props.scheduled && props.status === 'none') return <span class="mark-off" />;
+  if (!props.scheduled) return <span class="mark-off" />;
   return (
     <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
       <circle cx="12" cy="12" r="5.5" fill="none" stroke="currentColor" stroke-width="2.6" />
-      {props.status !== 'none' && <circle cx="12" cy="12" r="2.4" fill="currentColor" />}
     </svg>
   );
 }
@@ -159,12 +158,12 @@ function WeekCard(props: { habit: Habit; days: Day[]; today: Day; open: boolean;
   const goal = goalOn(habit, focus);
   const period = periodInfo(habit, index, focus, ws);
   const targetField = goal.target ? habit.fields.find((f) => f.id === goal.target!.fieldId) : undefined;
-  const names: Record<DayStatus, string> = { none: 'not done', min: 'smallest unit done', partial: 'partly done', met: 'done', exceeded: 'done, goal exceeded' };
+  const names: Record<DayStatus, string> = { none: 'not done', met: 'done', exceeded: 'done, goal exceeded' };
 
   const toggle = (day: Day) => {
     const recs = recordsOn(index, habit.id, day);
     if (types.length) return openLog(habit, day);
-    if (!recs.length) return quickLog(habit, null, day, 'full');
+    if (!recs.length) return quickLog(habit, null, day);
     if (recs.length === 1 && !recs[0].note) return removeRecord(recs[0]);
     openLog(habit, day);
   };
@@ -252,20 +251,18 @@ function openLog(habit: Habit, date: Day): void {
 
 function LogSheet(props: { habitId: string; date: Day; close: () => void }) {
   const { data, index } = useData();
-  const [minimum, setMinimum] = useState(false);
   const habit = data.habits.find((h) => h.id === props.habitId);
   if (!habit) return null;
   const types = activeTypes(data.activityTypes, habit.id);
   const recs = recordsOn(index, habit.id, props.date);
-  const level = minimum ? 'min' : 'full';
   const goal = currentGoal(habit);
   const targetField = goal.target ? habit.fields.find((f) => f.id === goal.target!.fieldId) : undefined;
 
   const tap = (type: ActivityType | null) => {
-    const values = quickValues(habit, type, level);
+    const values = quickValues(habit, type, 'full');
     const missing = fieldsFor(habit, type).some((f) => f.required && !values.some((v) => v.fieldId === f.id));
-    if (missing) openRecordForm(habit, null, { date: props.date, typeId: type?.id ?? null, level });
-    else quickLog(habit, type, props.date, level);
+    if (missing) openRecordForm(habit, null, { date: props.date, typeId: type?.id ?? null });
+    else quickLog(habit, type, props.date);
   };
 
   return (
@@ -293,18 +290,10 @@ function LogSheet(props: { habitId: string; date: Day; close: () => void }) {
         </>
       ) : (
         <button class="btn primary" onClick={() => tap(null)}>
-          {minimum ? `Log: ${habit.minimum?.label || 'smallest unit'}` : goal.target && targetField ? `Log ${formatNumber(goal.target.amount)} ${targetField.unit ?? targetField.name}` : 'Mark done'}
+          {goal.target && targetField ? `Log ${formatNumber(goal.target.amount)} ${targetField.unit ?? targetField.name}` : 'Mark done'}
         </button>
       )}
-      {habit.minimum && (
-        <label class="check-row">
-          <input type="checkbox" checked={minimum} onChange={(e) => setMinimum((e.target as HTMLInputElement).checked)} />
-          <span>
-            Just the smallest unit{habit.minimum.label ? `: ${habit.minimum.label}` : ''}
-          </span>
-        </label>
-      )}
-      <button class="btn" onClick={() => openRecordForm(habit, null, { date: props.date, typeId: null, level })}>
+      <button class="btn" onClick={() => openRecordForm(habit, null, { date: props.date, typeId: null })}>
         Log with details…
       </button>
       {recs.length > 0 && (
@@ -324,18 +313,17 @@ function LogSheet(props: { habitId: string; date: Day; close: () => void }) {
   );
 }
 
-export function openRecordForm(habit: Habit, rec: ActivityRecord | null, fresh?: { date: Day; typeId: string | null; level: 'full' | 'min' }): void {
+export function openRecordForm(habit: Habit, rec: ActivityRecord | null, fresh?: { date: Day; typeId: string | null }): void {
   openSheet(rec ? 'Edit entry' : 'New entry', (close) => <RecordForm habitId={habit.id} rec={rec} fresh={fresh} close={close} />, { tall: true });
 }
 
-function RecordForm(props: { habitId: string; rec: ActivityRecord | null; fresh?: { date: Day; typeId: string | null; level: 'full' | 'min' }; close: () => void }) {
+function RecordForm(props: { habitId: string; rec: ActivityRecord | null; fresh?: { date: Day; typeId: string | null }; close: () => void }) {
   const { data } = useData();
   const habit = data.habits.find((h) => h.id === props.habitId);
   const now = clock();
   const [typeId, setTypeId] = useState<string | null>(props.rec?.activityTypeId ?? props.fresh?.typeId ?? null);
   const [date, setDate] = useState(props.rec?.date ?? props.fresh?.date ?? now.today);
   const [time, setTime] = useState(props.rec ? props.rec.time ?? '' : date === now.today ? now.time : '');
-  const [level, setLevel] = useState<'full' | 'min'>(props.rec?.level ?? props.fresh?.level ?? 'full');
   const [note, setNote] = useState(props.rec?.note ?? '');
   const [values, setValues] = useState<Record<string, string>>(() => {
     const out: Record<string, string> = {};
@@ -381,8 +369,8 @@ function RecordForm(props: { habitId: string; rec: ActivityRecord | null; fresh?
     if (!date) return setError('Pick a date.');
     mutate((d, c) => {
       const existing = props.rec ? d.records.find((r) => r.id === props.rec!.id) : undefined;
-      if (existing) Object.assign(existing, { activityTypeId: typeId, date, time: time || null, level, values: out, note: note.trim(), updatedAt: c.now });
-      else logRecord(d, { habitId: habit.id, activityTypeId: typeId, date, time: time || null, level, values: out, note: note.trim() }, c);
+      if (existing) Object.assign(existing, { activityTypeId: typeId, date, time: time || null, values: out, note: note.trim(), updatedAt: c.now });
+      else logRecord(d, { habitId: habit.id, activityTypeId: typeId, date, time: time || null, values: out, note: note.trim() }, c);
     });
     props.close();
   };
@@ -426,17 +414,6 @@ function RecordForm(props: { habitId: string; rec: ActivityRecord | null; fresh?
           )}
         </Field>
       ))}
-      {habit.minimum && (
-        <Segmented
-          label="Effort"
-          value={level}
-          onChange={setLevel}
-          options={[
-            { value: 'full', label: 'Full session' },
-            { value: 'min', label: habit.minimum.label || 'Smallest unit' },
-          ]}
-        />
-      )}
       <Field label="Notes">
         <textarea class="input" rows={2} value={note} onInput={(e) => setNote((e.target as HTMLTextAreaElement).value)} />
       </Field>

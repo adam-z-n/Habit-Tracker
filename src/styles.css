@@ -682,18 +682,6 @@ textarea.input {
 .day.exceeded {
   box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--c, var(--accent));
 }
-.day.partial,
-.day.min {
-  background: conic-gradient(var(--c, var(--accent)) var(--f, 50%), var(--track) 0);
-}
-.day.partial::before,
-.day.min::before {
-  content: '';
-  position: absolute;
-  inset: 4px;
-  border-radius: 50%;
-  background: var(--surface);
-}
 .day.none {
   box-shadow: inset 0 0 0 1.5px var(--track);
 }
@@ -745,9 +733,6 @@ textarea.input {
 .legend .day.off {
   background: var(--surface-2);
   opacity: 0.6;
-}
-.legend .day.partial::before {
-  inset: 3px;
 }
 
 .detail-name {

@@ -10,7 +10,7 @@ import { useData } from './store';
 
 // One habit's page: its streaks, a month calendar to look back on, and its notes.
 
-type CellKind = 'future' | 'off' | 'none' | 'min' | 'partial' | 'met' | 'exceeded';
+type CellKind = 'future' | 'off' | 'none' | 'met' | 'exceeded';
 
 function habitCell(habit: Habit, index: Index, day: Day, today: Day): CellKind {
   if (day > today) return 'future';
@@ -19,9 +19,9 @@ function habitCell(habit: Habit, index: Index, day: Day, today: Day): CellKind {
   return dayInfo(habit, recs, goalOn(habit, day)).status as CellKind;
 }
 
-const NAMES: Record<CellKind, string> = { future: '', off: 'not scheduled', none: 'nothing recorded', min: 'smallest unit', partial: 'partly done', met: 'done', exceeded: 'goal exceeded' };
+const NAMES: Record<CellKind, string> = { future: '', off: 'not scheduled', none: 'nothing recorded', met: 'done', exceeded: 'done, goal exceeded' };
 
-function MonthGrid(props: { month: Day; today: Day; weekStart: number; cell: (day: Day) => { kind: CellKind; fraction: number } }) {
+function MonthGrid(props: { month: Day; today: Day; weekStart: number; cell: (day: Day) => CellKind }) {
   const first = monthStart(props.month);
   const lead = (weekday(first) - props.weekStart + 7) % 7;
   const count = Number(monthEnd(first).slice(8));
@@ -35,9 +35,9 @@ function MonthGrid(props: { month: Day; today: Day; weekStart: number; cell: (da
       ))}
       {cells.map((day, i) => {
         if (!day) return <div key={`e${i}`} />;
-        const c = props.cell(day);
+        const kind = props.cell(day);
         return (
-          <div key={day} class={`day ${c.kind}${day === props.today ? ' today' : ''}`} style={{ '--f': `${Math.round(c.fraction * 100)}%` }} aria-label={`${formatDay(day)}${NAMES[c.kind] ? `, ${NAMES[c.kind]}` : ''}`} role="img">
+          <div key={day} class={`day ${kind}${day === props.today ? ' today' : ''}`} aria-label={`${formatDay(day)}${NAMES[kind] ? `, ${NAMES[kind]}` : ''}`} role="img">
             <span class="day-num">{Number(day.slice(8))}</span>
           </div>
         );
@@ -51,9 +51,6 @@ function Legend() {
     <div class="legend">
       <span>
         <i class="day met" /> Done
-      </span>
-      <span>
-        <i class="day partial" style={{ '--f': '50%' }} /> Partly
       </span>
       <span>
         <i class="day none" /> Nothing recorded
@@ -130,10 +127,7 @@ function HabitStats(props: { habitId: string }) {
           month={month}
           today={today}
           weekStart={ws}
-          cell={(day) => {
-            const info = dayInfo(habit, recordsOn(index, habit.id, day), goalOn(habit, day));
-            return { kind: habitCell(habit, index, day, today), fraction: info.target ? Math.min(1, info.amount / info.target) : 0.5 };
-          }}
+          cell={(day) => habitCell(habit, index, day, today)}
         />
         <Legend />
       </div>

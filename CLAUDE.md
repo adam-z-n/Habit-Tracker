@@ -18,6 +18,8 @@ later. README, `docs/DATA_FORMAT.md`, `docs/GOOGLE_SHEETS.md`, `docs/ROADMAP.md`
 ## Rules to keep
 
 - Completions are derived from records, never stored (prevents double counting).
+- There is no "partly done" (owner's request, 0.3): a day with any record is done; `DayStatus` is only
+  `none`, `met` or `exceeded`. Older `min` records and days short of an old daily amount count as done.
 - Activity types and measurement fields are archived, not removed; records keep their own unit.
 - Goal edits append to `habit.goals` so past days keep their goal.
 - Changing the stored shape: bump `SCHEMA_VERSION`, add a step to `migrate`, update `docs/DATA_FORMAT.md`,
@@ -40,6 +42,8 @@ later. README, `docs/DATA_FORMAT.md`, `docs/GOOGLE_SHEETS.md`, `docs/ROADMAP.md`
 
 - `npm run typecheck`, `npm test`, `npm run build`. Vite 8 (oxc), TypeScript 7, Preact 11, Vitest 5.
 - Screenshots: `npm run build`, `npx vite preview --port 4173` in the background, then a Playwright script
-  (`NODE_PATH=/opt/node-tools/node_modules`, iPhone 13). Seed data by writing `habits:data` to localStorage.
+  (`NODE_PATH=/opt/node-tools/node_modules`). The owner uses an **iPhone 17**: Playwright has no preset, so use
+  `devices['iPhone 15 Pro']` with `viewport: { width: 402, height: 874 }`, `deviceScaleFactor: 3`. Seed data by
+  writing `habits:data` to localStorage.
 - Never push to `main`; one PR per round of changes. Keep `CHANGELOG.md` and `docs/ROADMAP.md` current.
 - The Google Sheets backup has only been tested against the fake, not a live deployment (as of 0.3.0).

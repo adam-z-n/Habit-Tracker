@@ -18,6 +18,11 @@
   and delete lists.
 - Reminders no longer show in the app, and Settings no longer has a Reminders section. Saved reminders stay
   in the data and backups.
+- No more "partly done": a day with anything recorded is done. The dotted circle on the Habits screen, the
+  Partly shading in the calendar, and the smallest-unit options when logging an activity are gone. Older
+  smallest-unit entries and days short of an old daily amount now count as done, which can lengthen past
+  streaks.
+- Checked at the iPhone 17 screen size (402×874 points).
 - Deleting a habit keeps its notes as journal entries.
 - Data: schema version 3 (to-do lists, structured smallest unit, softer habit colors). Older data and
   backups are upgraded on load. CSV export and the Google Sheet gain `todo_lists` and `todo_items`.

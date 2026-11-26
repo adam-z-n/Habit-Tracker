@@ -4,8 +4,10 @@ import { convert } from './units';
 
 // Completion is never stored: it is worked out from the activity records, so a day with two
 // activities is still one completed day, and editing a record can never leave a stale completion.
+// Since 0.3.1 there is no "partly done": a day with any record is done (the owner's request). Older
+// smallest-unit records and days short of an old daily amount therefore count as done too.
 
-export type DayStatus = 'none' | 'min' | 'partial' | 'met' | 'exceeded';
+export type DayStatus = 'none' | 'met' | 'exceeded';
 export type PeriodUnit = 'day' | 'week' | 'month';
 
 /** Records grouped by habit and then by day, each day's records in the order they happened. */
@@ -90,10 +92,6 @@ export function isScheduled(habit: Habit, day: Day): boolean {
   }
 }
 
-function countsAsFull(habit: Habit, rec: ActivityRecord): boolean {
-  return rec.level === 'full' || habit.minimum?.countsAsComplete === true;
-}
-
 /** A record's value for a field, in the field's current unit. Null when it has none. */
 export function fieldAmount(habit: Habit, rec: ActivityRecord, fieldId: string): number | null {
   const entry = rec.values.find((v) => v.fieldId === fieldId);
@@ -112,19 +110,12 @@ export interface DayInfo {
 export function dayInfo(habit: Habit, recs: ActivityRecord[], goal: Goal): DayInfo {
   const target = goal.target;
   if (!recs.length) return { status: 'none', amount: 0, target: target?.amount ?? null };
-  const onlyMinimum = recs.every((r) => r.level === 'min');
   if (target) {
     let amount = 0;
     for (const rec of recs) amount += fieldAmount(habit, rec, target.fieldId) ?? 0;
-    let status: DayStatus;
-    if (amount > target.amount) status = 'exceeded';
-    else if (amount >= target.amount) status = 'met';
-    else if (onlyMinimum) status = habit.minimum?.countsAsComplete ? 'met' : 'min';
-    else status = 'partial';
-    return { status, amount, target: target.amount };
+    return { status: amount > target.amount ? 'exceeded' : 'met', amount, target: target.amount };
   }
-  if (recs.some((r) => countsAsFull(habit, r))) return { status: 'met', amount: 0, target: null };
-  return { status: 'min', amount: 0, target: null };
+  return { status: 'met', amount: 0, target: null };
 }
 
 export function dayStatus(habit: Habit, index: Index, day: Day): DayStatus {
@@ -146,7 +137,7 @@ export interface PeriodInfo {
   unit: PeriodUnit;
   from: Day;
   to: Day;
-  /** Sessions so far; for goals with a daily amount, the days that reached it. */
+  /** Sessions so far; for goals with a daily amount, the days with activity. */
   count: number;
   goal: number;
   status: DayStatus;
@@ -164,17 +155,15 @@ export function periodInfo(habit: Habit, index: Index, day: Day, weekStartsOn: n
   const [from, to] = periodBounds(unit, day, weekStartsOn);
   const times = Math.max(1, (goal.frequency as { times: number }).times);
   let count = 0;
-  let any = false;
   const days = index.get(habit.id);
   if (days) {
     for (const [date, recs] of days) {
       if (date < from || date > to) continue;
-      any = true;
-      if (goal.target) count += isDone(dayInfo(habit, recs, goal).status) ? 1 : 0;
-      else count += recs.filter((r) => countsAsFull(habit, r)).length;
+      count += goal.target ? 1 : recs.length;
     }
   }
-  const status: DayStatus = count > times ? 'exceeded' : count >= times ? 'met' : count > 0 ? 'partial' : any ? 'min' : 'none';
+  // A period short of its goal is simply not done yet; "2 of 3 this week" shows the progress.
+  const status: DayStatus = count > times ? 'exceeded' : count >= times ? 'met' : 'none';
   return { unit, from, to, count, goal: times, status };
 }
 
@@ -280,7 +269,7 @@ export function totals(habit: Habit, index: Index, from: Day, to: Day): Totals {
     const goal = goalOn(habit, day);
     if (unitOf(goal.frequency) === 'day' || goal.target) {
       if (isDone(dayInfo(habit, recs, goal).status)) out.completions++;
-    } else out.completions += recs.filter((r) => countsAsFull(habit, r)).length;
+    } else out.completions += recs.length;
   }
   return out;
 }

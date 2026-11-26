@@ -54,12 +54,13 @@ colors are left alone).
 
 Completions are not stored. They are calculated from the records, which is what prevents double counting:
 
-- **Daily goals** (every day, chosen weekdays, every N days): a scheduled day is complete when it has a full
-  record, or, with a daily amount, when the day's records add up to the amount. Two activities on one day
-  are two records and one completed day.
-- **Weekly and monthly goals**: each full record is a session toward "N times". With a daily amount, a day
-  counts once, when it reaches the amount.
-- A `min` record makes a day partial unless the habit's minimum is set to count as complete.
+- **Daily goals** (every day, chosen weekdays, every N days): a scheduled day is complete when it has any
+  record. Two activities on one day are two records and one completed day. With an (older) daily amount, a
+  day above the amount is `exceeded`.
+- **Weekly and monthly goals**: each record is a session toward "N times". With a daily amount, a day with
+  activity counts once.
+- There is no partly done day (since 0.3): `min` records, and days short of an old daily amount, count as
+  complete. `countsAsComplete` is kept in the data but no longer changes anything.
 - A day that was not scheduled is never a miss.
 
 ## CSV export and Google Sheet tabs

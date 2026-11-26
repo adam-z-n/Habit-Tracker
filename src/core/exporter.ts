@@ -84,7 +84,7 @@ export function tables(data: AppData, weekStartsOn: number = data.settings.weekS
     header: ['id', 'habit_id', 'habit_name', 'period', 'period_start', 'period_end', 'status', 'completion_type', 'amount', 'goal', 'record_ids'],
     rows: [],
   };
-  const typeOf = (status: string) => (status === 'met' ? 'target' : status === 'exceeded' ? 'exceeded' : status === 'min' ? 'minimum' : 'partial');
+  const typeOf = (status: string) => (status === 'exceeded' ? 'exceeded' : status === 'met' ? 'target' : '');
   for (const habit of byOrder(data.habits)) {
     const days = index.get(habit.id);
     if (!days) continue;
