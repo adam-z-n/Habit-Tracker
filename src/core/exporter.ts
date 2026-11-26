@@ -118,8 +118,8 @@ export function tables(data: AppData, weekStartsOn: number = data.settings.weekS
   const listById = new Map(data.todoLists.map((l) => [l.id, l]));
   const todoLists: Table = {
     name: 'todo_lists',
-    header: ['id', 'name', 'order', 'created_at', 'updated_at'],
-    rows: byOrder(data.todoLists).map((l) => [l.id, l.name, l.order, l.createdAt, l.updatedAt]),
+    header: ['id', 'name', 'color', 'order', 'created_at', 'updated_at'],
+    rows: byOrder(data.todoLists).map((l) => [l.id, l.name, l.color, l.order, l.createdAt, l.updatedAt]),
   };
   const todoItems: Table = {
     name: 'todo_items',

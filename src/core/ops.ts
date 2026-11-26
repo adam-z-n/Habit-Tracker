@@ -1,4 +1,5 @@
 import type { ActivityRecord, ActivityType, AppData, Day, FieldDef, Frequency, Goal, Habit, JournalEntry, RecordValue, Reminder, Target, TodoItem, TodoList } from './types';
+import { SOFT_COLORS } from './importer';
 import { currentGoal } from './stats';
 
 // Every change to the data goes through these functions. They mutate the AppData they are given
@@ -248,15 +249,24 @@ export function makeMinimum(amount: number | null, unit: string, countsAsComplet
 
 const nextOrder = (list: { order: number }[]) => list.reduce((max, x) => Math.max(max, x.order), -1) + 1;
 
-export function createTodoList(data: AppData, name: string, clock: Clock): TodoList {
-  const list: TodoList = { id: newId(), name: name.trim() || 'To-do', order: nextOrder(data.todoLists), createdAt: clock.now, updatedAt: clock.now };
+/** The first habit color no list uses yet, or the next one in turn when all are taken. */
+export function nextListColor(data: AppData): string {
+  const used = new Set(data.todoLists.map((l) => l.color));
+  return SOFT_COLORS.find((c) => !used.has(c)) ?? SOFT_COLORS[data.todoLists.length % SOFT_COLORS.length];
+}
+
+export function createTodoList(data: AppData, name: string, clock: Clock, color?: string): TodoList {
+  const list: TodoList = { id: newId(), name: name.trim() || 'To-do', color: color || nextListColor(data), order: nextOrder(data.todoLists), createdAt: clock.now, updatedAt: clock.now };
   data.todoLists.push(list);
   return list;
 }
 
-export function renameTodoList(data: AppData, id: string, name: string, clock: Clock): void {
+export function updateTodoList(data: AppData, id: string, patch: { name?: string; color?: string }, clock: Clock): void {
   const list = data.todoLists.find((l) => l.id === id);
-  if (list && name.trim() && list.name !== name.trim()) Object.assign(list, { name: name.trim(), updatedAt: clock.now });
+  if (!list) return;
+  const name = patch.name?.trim();
+  if (name && name !== list.name) Object.assign(list, { name, updatedAt: clock.now });
+  if (patch.color && patch.color !== list.color) Object.assign(list, { color: patch.color, updatedAt: clock.now });
 }
 
 /** Deletes a list and everything on it. */

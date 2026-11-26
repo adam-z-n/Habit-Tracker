@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.0
+
+- To-do opens on an overview of all your lists, each shown as a card in its color with how many to-dos are
+  left. Tap one to open it; tapping the To-do tab again comes back to the overview.
+- Each list has a color from the same palette as habits, chosen when you create a list and changeable with
+  Edit list. An open list tints the screen in its color and shows its name in that color, in bold.
+- The menu on the list's name still switches between lists (now with their colors), and adds All lists.
+- Data: schema version 4 gives each list a `color`; existing lists get one automatically. The `todo_lists`
+  export gains a `color` column.
+
 ## 0.3.0
 
 - Habits: slimmer cards with a smaller name and no icon or reminder bell. Tapping a card shows only Add note,

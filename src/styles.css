@@ -1,6 +1,7 @@
 :root {
   --accent: #2f6f5e;
-  --bg: #f6f5f2;
+  --bg-base: #f6f5f2;
+  --bg: var(--bg-base);
   --surface: #ffffff;
   --surface-2: #efede8;
   --text: #1c1f1d;
@@ -13,7 +14,7 @@
   color-scheme: light;
 }
 :root[data-theme='dark'] {
-  --bg: #141614;
+  --bg-base: #141614;
   --surface: #1e211f;
   --surface-2: #282c29;
   --text: #f0f1ee;
@@ -1280,4 +1281,53 @@ textarea.input {
   padding-top: 14px;
   margin-left: -10px;
   margin-right: -10px;
+}
+
+/* To-do: the overview of lists, and an open list tinted with its color */
+:root.tinted {
+  --bg: color-mix(in srgb, var(--tint) 22%, var(--bg-base));
+}
+.calm-title {
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+.title-text.tinted {
+  font-weight: 700;
+  color: color-mix(in srgb, var(--tint) 72%, var(--text));
+}
+.lists {
+  list-style: none;
+  margin: 0;
+  padding: 4px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.list-card {
+  width: 100%;
+  min-height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 18px;
+  border-radius: 18px;
+  text-align: left;
+  background: color-mix(in srgb, var(--c) 45%, #fff);
+  color: #15171a;
+}
+.list-name {
+  font-size: 17px;
+  font-weight: 650;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.list-count {
+  flex: none;
+  font-size: 14px;
+  color: rgba(21, 23, 26, 0.62);
 }

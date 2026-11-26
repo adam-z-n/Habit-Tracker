@@ -20,6 +20,8 @@ export function App() {
   const { data } = useData();
   const [tab, setTab] = useState<Tab>('habits');
   const [today, setToday] = useState(localDay());
+  // Tapping To-do again while on it goes back to the overview of all lists.
+  const [todoKey, setTodoKey] = useState(0);
 
   // Theme and accent follow the settings.
   useEffect(() => {
@@ -56,13 +58,17 @@ export function App() {
     <div class="app">
       <main>
         {tab === 'habits' && <TodayScreen key={today} today={today} />}
-        {tab === 'todo' && <TodoScreen />}
+        {tab === 'todo' && <TodoScreen key={todoKey} />}
         {tab === 'journal' && <JournalScreen today={today} />}
         {tab === 'settings' && <SettingsScreen />}
       </main>
       <nav class="tabs" aria-label="Sections">
         {TABS.map((t) => (
-          <button key={t.id} class={tab === t.id ? 'on' : ''} aria-current={tab === t.id ? 'page' : undefined} onClick={() => setTab(t.id)}>
+          <button key={t.id} class={tab === t.id ? 'on' : ''} aria-current={tab === t.id ? 'page' : undefined} onClick={() => {
+              if (t.id === 'todo' && tab === 'todo') setTodoKey((k) => k + 1);
+              setTab(t.id);
+            }}
+          >
             <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
               <path d={t.icon} fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
             </svg>

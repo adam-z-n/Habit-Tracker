@@ -3,7 +3,7 @@
 /** A local calendar day, `YYYY-MM-DD`. */
 export type Day = string;
 
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 export type Frequency =
   | { type: 'daily' }
@@ -140,6 +140,8 @@ export interface Reminder {
 export interface TodoList {
   id: string;
   name: string;
+  /** One of the habit colors (schema 4). */
+  color: string;
   order: number;
   createdAt: string;
   updatedAt: string;

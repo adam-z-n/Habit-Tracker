@@ -8,9 +8,9 @@ it in an envelope:
   "format": "habit-tracker-backup",
   "formatVersion": 1,
   "exportedAt": "2026-11-15T14:03:22.120Z",
-  "appVersion": "0.3.0",
+  "appVersion": "0.4.0",
   "timeZone": "America/New_York",
-  "data": { "schemaVersion": 3, "habits": [], "activityTypes": [], "records": [], "journal": [], "reminders": [], "todoLists": [], "todos": [], "settings": {}, "deleted": [] }
+  "data": { "schemaVersion": 4, "habits": [], "activityTypes": [], "records": [], "journal": [], "reminders": [], "todoLists": [], "todos": [], "settings": {}, "deleted": [] }
 }
 ```
 
@@ -21,7 +21,7 @@ to update.
 Schema versions: 1 was the first; 2 added `kind` to journal entries (older entries become `journal`); 3 added
 `todoLists` and `todos`, the optional `amount` and `unit` of `minimum`, and moved habits whose color was on the
 pre-0.3 palette to the matching softer color (`OLD_COLORS` to `SOFT_COLORS` in `src/core/importer.ts`; other
-colors are left alone).
+colors are left alone); 4 gave each to-do list a `color`, assigned in list order from the habit palette.
 
 ## Conventions
 
@@ -45,7 +45,7 @@ colors are left alone).
 | `records[]` | One activity event: `id`, `habitId`, `activityTypeId` (or `null`), `date`, `time`, `tz`, `level` (`full` or `min`), `values[]` (`{fieldId, value, unit}`), `note` |
 | `journal[]` | `id`, `kind` (`journal`, or `note` for a note about one habit, whose id is then the only entry in `habitIds`), `date`, `text`, `mood` (1–5 or `null`), `habitIds[]` |
 | `reminders[]` | `id`, `habitId`, `time`, `days[]`, `text`, `enabled`. Kept for older data; since 0.3.0 the app no longer shows or edits reminders. |
-| `todoLists[]` | `id`, `name`, `order` |
+| `todoLists[]` | `id`, `name`, `color` (one of the habit colors), `order` |
 | `todos[]` | `id`, `listId`, `text`, `done`, `doneAt` (timestamp or `null`), `order`. Deleting a list deletes its items. |
 | `settings` | `theme`, `accent`, `weekStart`, `distanceUnit`, `timeFormat`, `detail` |
 | `deleted[]` | `{id, at}`: remembers deletions so merging an older backup does not bring items back |

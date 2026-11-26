@@ -81,7 +81,8 @@ export interface MenuItem {
 }
 
 /** A title that opens a menu below it: "Journal ⌄". */
-export function TitleMenu(props: { title: string; items: MenuItem[]; label: string; color?: string }) {
+/** `color` puts a dot before the title; `tint` sets the title itself in a (deepened) color. */
+export function TitleMenu(props: { title: string; items: MenuItem[]; label: string; color?: string; tint?: string }) {
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -101,7 +102,9 @@ export function TitleMenu(props: { title: string; items: MenuItem[]; label: stri
     <div class="title-menu" ref={box}>
       <button class="title-btn" aria-haspopup="menu" aria-expanded={open} aria-label={`${props.title}. ${props.label}`} onClick={() => setOpen(!open)}>
         {props.color && <span class="dot" style={{ background: props.color }} />}
-        <span class="title-text">{props.title}</span>
+        <span class={`title-text${props.tint ? ' tinted' : ''}`} style={props.tint ? { '--tint': props.tint } : undefined}>
+          {props.title}
+        </span>
         <span class={`caret${open ? ' up' : ''}`}>
           <Icon d={CARET} size={20} />
         </span>
