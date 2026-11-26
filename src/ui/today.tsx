@@ -2,7 +2,7 @@ import { useState } from 'preact/hooks';
 import { describeRecord } from '../core/breakdown';
 import { addDays, formatDay, formatTime, MONTH_LONG, weekday, weekStart, WEEKDAY_SHORT } from '../core/dates';
 import { deleteRecord, fieldsFor, logRecord, quickValues } from '../core/ops';
-import { currentGoal, dayInfo, describeFrequency, goalOn, isDone, isScheduled, periodInfo, recordsBetween, recordsOn, streak, unitOf, type DayStatus } from '../core/stats';
+import { currentGoal, dayInfo, describeFrequency, goalOn, habitStart, isDone, isScheduled, weekProgress, recordsBetween, recordsOn, streak, unitOf, type DayStatus } from '../core/stats';
 import type { ActivityRecord, ActivityType, Day, Habit, RecordValue } from '../core/types';
 import { formatNumber } from '../core/units';
 import { Field } from './common';
@@ -171,15 +171,11 @@ function WeekCard(props: { habit: Habit; days: Day[]; today: Day; open: boolean;
   const run = streak(habit, index, today, ws);
   const focus = today >= days[0] && today <= days[6] ? today : days[6];
   const goal = goalOn(habit, focus);
-  const period = periodInfo(habit, index, focus, ws);
+  // The habit's effective start: its start date, or an earlier day that has a check mark.
+  const first = habitStart(habit, index);
   // Progress for the week shown: sessions toward a weekly (or monthly) goal, or done days out of due days.
-  let progress = '';
-  if (period) progress = `${period.count} of ${period.goal} this ${period.unit}`;
-  else {
-    const due = days.filter((d) => isScheduled(habit, d));
-    const done = due.filter((d) => isDone(dayInfo(habit, recordsOn(index, habit.id, d), goalOn(habit, d)).status));
-    if (due.length) progress = `${done.length} of ${due.length} this week`;
-  }
+  const wp = weekProgress(habit, index, days, focus, ws);
+  const progress = wp ? `${wp.done} of ${wp.due} this ${wp.unit}` : '';
   const names: Record<DayStatus, string> = { none: 'not done', met: 'done', exceeded: 'done, goal exceeded' };
 
   const toggle = (day: Day) => {
@@ -202,7 +198,7 @@ function WeekCard(props: { habit: Habit; days: Day[]; today: Day; open: boolean;
         {days.map((day) => {
           const info = dayInfo(habit, recordsOn(index, habit.id, day), goalOn(habit, day));
           // Weekly and monthly goals can be done on any day, so every day is open for them.
-          const scheduled = isScheduled(habit, day) || (unitOf(goalOn(habit, day).frequency) !== 'day' && day >= habit.startDate);
+          const scheduled = isScheduled(habit, day, first) || (unitOf(goalOn(habit, day).frequency) !== 'day' && day >= first);
           return (
             <button key={day} class={`mark ${info.status}`} disabled={day > today} aria-pressed={isDone(info.status)} aria-label={`${habit.name}, ${formatDay(day)}: ${names[info.status]}`} onClick={() => toggle(day)}>
               <DayMark status={info.status} scheduled={scheduled} />

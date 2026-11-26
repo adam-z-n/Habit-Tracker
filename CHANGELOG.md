@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.3
+
+- Fix: check marks added for days before a habit was created were shown but not counted. A habit starts on
+  the day it is made, and earlier days were treated as not due, so "X of Y this week", streaks and the Stats
+  calendar left them out. A habit now counts as started on its earliest check mark when that is earlier, so
+  back-filled days count everywhere. Existing data is corrected on its own (nothing stored changes).
+
 ## 0.4.2
 
 - Habits: under each habit's name, the smallest unit shows with its number in bold (or the schedule when
